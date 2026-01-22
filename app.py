@@ -4,7 +4,7 @@ import numpy as np
 
 st.set_page_config(page_title='EstimeClermont', page_icon='🏠', layout='wide')
 
-# Logo RE/MAX direct imgur
+# Logo RE/MAX
 st.image('https://i.imgur.com/r7P0dbK.png', width=200, caption='RE/MAX Serenity')
 
 st.title("🏠 Estimation gratuite de mon logement à Clermont de l'Oise")
@@ -12,7 +12,6 @@ st.markdown("***Hakim SABER - Agence RE/MAX Serenity***")
 st.markdown("📍 21 rue Eugène Gazeau, 60300 Senlis")
 st.markdown("📞 Contactez-moi pour estimation précise")
 
-# 3 Avantages
 st.markdown("### Pourquoi choisir notre estimation ?")
 cols = st.columns(3)
 with cols[0]:
@@ -27,7 +26,6 @@ with cols[2]:
 
 st.markdown("---")
 
-# Données IA base
 prix_m2_maison = 2100
 prix_m2_appart = 2500
 tendances_mensuelles = {
@@ -45,4 +43,4 @@ tendances_mensuelles = {
     '2026-12': 1.02
 }
 
-def estimer_prix(bien_type, sur
+def estimer_prix(bien_type, surface

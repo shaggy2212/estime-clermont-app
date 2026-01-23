@@ -19,14 +19,88 @@ body {
 
 .main {
     background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%);
-    padding-top: 2rem;
+    padding-top: 0;
+}
+
+/* Banner Header */
+.banner-section {
+    background: linear-gradient(135deg, #003A70 0%, #1a5490 100%);
+    padding: 2rem;
+    border-radius: 0 0 12px 12px;
+    margin: -2rem -2rem 2rem -2rem;
+    text-align: center;
+}
+
+.banner-logo {
+    max-width: 100%;
+    height: auto;
+}
+
+.banner-contact {
+    color: white;
+    font-size: 0.95rem;
+    margin-top: 1rem;
+}
+
+.banner-contact a {
+    color: #FFD700;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.banner-contact a:hover {
+    text-decoration: underline;
+}
+
+.agent-card {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 8px 25px rgba(0, 58, 112, 0.15);
+    border: 2px solid #e0e7ff;
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    margin: 2rem auto;
+    max-width: 600px;
+}
+
+.agent-photo {
+    flex-shrink: 0;
+}
+
+.agent-photo img {
+    border-radius: 12px;
+    width: 140px;
+    height: 140px;
+    object-fit: cover;
+    box-shadow: 0 4px 12px rgba(0, 58, 112, 0.2);
+}
+
+.agent-info h2 {
+    margin: 0 0 0.5rem 0;
+    color: #003A70;
+    font-size: 1.6rem;
+}
+
+.agent-info p {
+    margin: 0.3rem 0;
+    color: #475569;
+    font-size: 0.95rem;
+}
+
+.agent-info strong {
+    color: #E63946;
+    font-weight: 700;
 }
 
 h1 {
     color: #003A70 !important;
     font-weight: 700 !important;
     font-size: 2.8rem !important;
-    margin-bottom: 1rem !important;
+    text-align: center !important;
+    line-height: 1.3 !important;
+    margin: 0 !important;
 }
 
 h2, h3 {
@@ -53,7 +127,7 @@ h2, h3 {
 .stButton > button {
     background: linear-gradient(135deg, #E63946 0%, #d62834 100%) !important;
     color: white !important;
-    font-weight: 600 !important;
+    font-weight: 700 !important;
     border-radius: 10px !important;
     border: none !important;
     padding: 0.8rem 2rem !important;
@@ -114,7 +188,8 @@ h2, h3 {
     border-radius: 12px;
     padding: 2rem;
     box-shadow: 0 4px 15px rgba(0, 58, 112, 0.08);
-    margin: 1.5rem 0;
+    margin: 1.5rem auto;
+    max-width: 700px;
 }
 
 .footer-section {
@@ -125,6 +200,10 @@ h2, h3 {
     text-align: center;
     margin-top: 3rem;
     box-shadow: 0 4px 15px rgba(0, 58, 112, 0.2);
+}
+
+.footer-section h3 {
+    color: white !important;
 }
 
 .social-links {
@@ -144,35 +223,78 @@ h2, h3 {
 .social-links a:hover {
     transform: scale(1.2);
 }
+
+.month-select {
+    max-width: 200px;
+}
 </style>
 """, unsafe_allow_html=True)
 
-st.image('https://i.imgur.com/r7P0dbK.png', width=220, caption='RE/MAX Serenity')
+# Banner Header avec logo RE/MAX + image Clermont
+st.markdown("""
+<div class="banner-section">
+    <img src="https://i.imgur.com/r7P0dbK.png" width="200" alt="RE/MAX Serenity">
+    <div class="banner-contact">
+        <strong>📞 <a href="tel:+33688288513">06 88 28 85 13</a> | 📧 <a href="mailto:hakim.saber@remax.fr">hakim.saber@remax.fr</a></strong>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-st.title("🏠 Estimation gratuite de mon logement à Clermont de l'Oise")
+# Image emblématique Clermont (génération IA ou URL réelle)
+st.image('https://images.unsplash.com/photo-1469022563149-aa64dbd37dae?w=1200&h=400&fit=crop', use_column_width=True)
 
-col_photo1, col_photo2 = st.columns([1, 3])
-with col_photo1:
-    st.image('https://i.imgur.com/KsQopoC.jpeg', width=150, caption='Hakim SABER')
-with col_photo2:
-    st.markdown("### ***Hakim SABER***")
-    st.markdown("**Agence RE/MAX Serenity**")
-    st.markdown("📍 21 rue Eugène Gazeau, 60300 Senlis")
-    st.markdown("📞 Contactez-moi pour estimation précise")
+# Titre centré avec saut de ligne
+st.markdown("<h1 style='text-align: center; margin-top: 2rem;'>🏠 Estimation gratuite<br>de mon logement à Clermont de l'Oise</h1>", unsafe_allow_html=True)
 
 st.markdown("---")
 
+# Agent Card - Photo + Coordonnées
+st.markdown("""
+<div class="agent-card">
+    <div class="agent-photo">
+        <img src="https://i.imgur.com/KsQopoC.jpeg" alt="Hakim SABER">
+    </div>
+    <div class="agent-info">
+        <h2>Hakim SABER</h2>
+        <p><strong>RE/MAX Serenity</strong></p>
+        <p>📍 21 rue Eugène Gazeau, 60300 Senlis</p>
+        <p>📱 <strong>06 88 28 85 13</strong></p>
+        <p>📧 <strong>hakim.saber@remax.fr</strong></p>
+        <p style="margin-top: 0.8rem; font-style: italic; color: #E63946;">Contactez-moi pour estimation précise</p>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+st.markdown("---")
+
+# 3 Avantages
 st.markdown("## Pourquoi choisir notre estimation ?")
 cols = st.columns(3, gap='large')
 with cols[0]:
-    st.markdown('<div class="advantage-card"><h3>✅ Locale à Clermont</h3><p>Données précises quartier par quartier (DVF 2026)</p></div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="advantage-card">
+        <h3>✅ Locale à Clermont</h3>
+        <p>Données précises quartier par quartier (DVF 2026)</p>
+    </div>
+    """, unsafe_allow_html=True)
 with cols[1]:
-    st.markdown('<div class="advantage-card"><h3>⚡ Retour immédiat</h3><p>Résultat en 30 secondes</p></div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="advantage-card">
+        <h3>⚡ Retour immédiat</h3>
+        <p>Résultat en 30 secondes</p>
+    </div>
+    """, unsafe_allow_html=True)
 with cols[2]:
-    st.markdown('<div class="advantage-card"><h3>💡 Conseils personnalisés</h3><p>Astuces pour mettre en avant votre bien</p></div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="advantage-card">
+        <h3>💡 Conseils personnalisés</h3>
+        <p>Astuces pour mettre en avant votre bien</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 st.markdown("---")
 
+# Données IA
 prix_m2_maison = 2100
 prix_m2_appart = 2500
 tendances_mensuelles = {'2026-01': 1.02, '2026-02': 1.01, '2026-03': 1.015, '2026-04': 1.00, '2026-05': 1.01, '2026-06': 1.02, '2026-07': 1.00, '2026-08': 1.00, '2026-09': 1.01, '2026-10': 1.015, '2026-11': 1.01, '2026-12': 1.02}
@@ -190,6 +312,7 @@ def estimer_prix(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare
     fourchette_max = prix_total * 1.05
     return {'Prix estimé': f"€{prix_total:,.0f}", 'Fourchette': f"€{fourchette_min:,.0f} - €{fourchette_max:,.0f}", 'Prix m²': f"€{prix_ajuste * facteur_pieces * facteur_etat * facteur_chambres * facteur_gare:,.0f}", 'Détails': f"{mois}: {prix_base}€/m² base ×{facteur_mois:.1%}, {nb_pieces}p, {nb_chambres}ch, {etat}, gare{distance_gare}m"}
 
+# Formulaire réduit en largeur
 st.markdown('<div class="form-section">', unsafe_allow_html=True)
 st.markdown("## 📋 Décrivez votre bien")
 
@@ -220,9 +343,13 @@ with col1:
 with col2:
     telephone = st.text_input('📱 Votre téléphone')
 
-mois = st.selectbox('📅 Mois référence', sorted(tendances_mensuelles.keys()), index=0)
+col_mois = st.columns([0.3, 0.4, 0.3])
+with col_mois[0]:
+    mois = st.selectbox('📅 Mois', sorted(tendances_mensuelles.keys()), index=0)
+
 st.markdown('</div>', unsafe_allow_html=True)
 
+# Bouton CTA centré
 col_button = st.columns([0.3, 0.4, 0.3])
 with col_button[1]:
     if st.button('🚀 Obtenir mon estimation gratuite !', use_container_width=True):
@@ -244,4 +371,18 @@ with col_button[1]:
             st.markdown('<div class="error-box"><strong>⚠️ Attention !</strong> Veuillez remplir adresse, téléphone et email pour résultat personnalisé</div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown('<div class="footer-section"><h3>📞 Parlons de votre bien !</h3><p><strong>Hakim SABER - RE/MAX Serenity Senlis</strong></p><p>21 rue Eugène Gazeau, 60300 Senlis</p><p><strong>Données DVF Oise 2026 | Estimation gratuite sans engagement</strong></p><div class="social-links"><a href="https://www.facebook.com/remax.serenity" target="_blank" title="Facebook">📘</a><a href="https://www.linkedin.com" target="_blank" title="LinkedIn">💼</a><a href="https://wa.me/33" target="_blank" title="WhatsApp">💬</a></div></div>', unsafe_allow_html=True)
+
+# Footer
+st.markdown("""
+<div class="footer-section">
+    <h3 style="color: white;">📞 Parlons de votre bien !</h3>
+    <p><strong>Hakim SABER - RE/MAX Serenity Senlis</strong></p>
+    <p>21 rue Eugène Gazeau, 60300 Senlis</p>
+    <p><strong>Données DVF Oise 2026 | Estimation gratuite sans engagement</strong></p>
+    <div class="social-links">
+        <a href="https://www.facebook.com" target="_blank" title="Facebook">📘</a>
+        <a href="https://www.linkedin.com" target="_blank" title="LinkedIn">💼</a>
+        <a href="https://wa.me/33688288513" target="_blank" title="WhatsApp">💬</a>
+    </div>
+</div>
+""", unsafe_allow_html=True)

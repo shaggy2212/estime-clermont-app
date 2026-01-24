@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import requests
 import math
+from datetime import datetime
 
 st.set_page_config(page_title='EstimeClermont', page_icon='🏠', layout='wide', initial_sidebar_state='collapsed')
 
@@ -192,53 +193,6 @@ h2, h3 {
 </style>
 """, unsafe_allow_html=True)
 
-# ============================
-# Fonctions distance automatique
-# ============================
-
-GARE_LAT = 49.3833  # exemple à ajuster si besoin
-GARE_LON = 2.4167
-
-def haversine(lat1, lon1, lat2, lon2):
-    R = 6371000
-    phi1 = math.radians(lat1)
-    phi2 = math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
-    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    return R * c
-
-def geocode_adresse(adresse_complete):
-    if not adresse_complete:
-        return None, None
-    url = "https://nominatim.openstreetmap.org/search"
-    params = {
-        "q": adresse_complete,
-        "format": "json",
-        "addressdetails": 1,
-        "limit": 1
-    }
-    headers = {"User-Agent": "EstimeClermont/1.0"}
-    try:
-        r = requests.get(url, params=params, headers=headers, timeout=5)
-        data = r.json()
-        if not 
-            return None, None
-        lat = float(data[0]["lat"])
-        lon = float(data[0]["lon"])
-        return lat, lon
-    except Exception:
-        return None, None
-
-def calculer_distance_gare(adresse_complete, ville, code_postal):
-    adresse_full = f"{adresse_complete}, {code_postal} {ville}, France"
-    lat, lon = geocode_adresse(adresse_full)
-    if lat is None:
-        return None
-    distance_m = haversine(lat, lon, GARE_LAT, GARE_LON)
-    return int(distance_m)
-
 # Header avec bannière Clermont
 st.image('https://i.imgur.com/ecj6wDx.jpeg', use_column_width=True)
 
@@ -296,6 +250,44 @@ tendances_mensuelles = {
     '2026-09': 1.01, '2026-10': 1.015, '2026-11': 1.01, '2026-12': 1.02
 }
 
+GARE_CLERMONT_LAT = 49.633209
+GARE_CLERMONT_LON = 2.360344
+
+def haversine(lat1, lon1, lat2, lon2):
+    """Calcule la distance en mètres entre deux points GPS (formule Haversine)"""
+    R = 6371000
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+    
+    a = math.sin(delta_phi/2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda/2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    return R * c
+
+def calculer_distance_gare(adresse):
+    """Calcule la distance à la gare en fonction de l'adresse"""
+    try:
+        params = {
+            'q': f"{adresse}, 60600 Clermont, France",
+            'format': 'json',
+            'limit': 1
+        }
+        headers = {'User-Agent': 'EstimeClermont/1.0'}
+        response = requests.get('https://nominatim.openstreetmap.org/search', params=params, headers=headers, timeout=5)
+        
+        if response.status_code == 200 and len(response.json()) > 0:
+            result = response.json()[0]
+            lat = float(result['lat'])
+            lon = float(result['lon'])
+            
+            distance = haversine(lat, lon, GARE_CLERMONT_LAT, GARE_CLERMONT_LON)
+            return int(distance)
+        else:
+            return None
+    except Exception:
+        return None
+
 def estimer_prix(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare, mois):
     prix_base = prix_m2_maison if bien_type == 'maison' else prix_m2_appart
     facteur_mois = tendances_mensuelles[mois]
@@ -309,7 +301,7 @@ def estimer_prix(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare
     fourchette_max = prix_total * 1.05
     return {
         'Prix estimé': f"€{prix_total:,.0f}",
-        'Fourchette': f"€{fourchette_min:,.0f}",
+        'Fourchette': f"€{fourchette_min:,.0f} - €{fourchette_max:,.0f}",
         'Prix m²': f"€{prix_ajuste * facteur_pieces * facteur_etat * facteur_chambres * facteur_gare:,.0f}",
         'Détails': f"{mois}: {prix_base}€/m² base ×{facteur_mois:.1%}, {nb_pieces}p, {nb_chambres}ch, {etat}, gare{distance_gare}m"
     }
@@ -338,23 +330,24 @@ with col1:
     code_postal = st.text_input('📮 Code postal', value='60600')
 with col2:
     ville = st.text_input('🏘️ Ville', value='Clermont')
-
-    # Distance à la gare (calcul auto + modifiable)
-    if "distance_gare" not in st.session_state:
-        st.session_state.distance_gare = 1000
-
-    distance_gare = st.number_input('🚂 Distance à la gare (m)', 0, 5000, st.session_state.distance_gare, step=100)
-
-    if st.button("🔍 Calculer distance gare automatiquement"):
-        if adresse and ville and code_postal:
-            dist_calc = calculer_distance_gare(adresse, ville, code_postal)
-            if dist_calc is not None:
-                st.session_state.distance_gare = dist_calc
-                st.success(f"Distance estimée à la gare : ~{dist_calc} m")
+    
+    col_dist_auto, col_dist_manual = st.columns([1, 1], gap='small')
+    with col_dist_auto:
+        if st.button('🔍 Calculer distance gare', use_container_width=True):
+            if adresse:
+                with st.spinner('🔄 Calcul en cours...'):
+                    dist_calc = calculer_distance_gare(adresse)
+                    if dist_calc is not None:
+                        st.session_state.distance_gare = dist_calc
+                        st.success(f'✅ Distance calculée: {dist_calc}m')
+                    else:
+                        st.warning('⚠️ Adresse non trouvée, entrez manuellement')
             else:
-                st.warning("Impossible de calculer la distance automatiquement. Vérifiez l'adresse.")
-        else:
-            st.warning("Veuillez renseigner adresse, ville et code postal.")
+                st.error('❌ Veuillez d\'abord saisir l\'adresse')
+    
+    distance_gare = st.number_input('🚂 Distance à la gare (m)', 0, 5000, 
+                                    value=st.session_state.get('distance_gare', 1000), 
+                                    step=100)
 
 # Section 3: Coordonnées
 st.markdown("### Vos coordonnées")
@@ -381,8 +374,7 @@ col_button = st.columns([0.3, 0.4, 0.3])
 with col_button[1]:
     if st.button('🚀 Obtenir mon estimation gratuite !', use_container_width=True):
         if adresse and telephone and email:
-            distance_utilisee = st.session_state.get("distance_gare", distance_gare)
-            result = estimer_prix(bien_type, surface, nb_pieces, nb_chambres, etat, distance_utilisee, mois)
+            result = estimer_prix(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare, mois)
             
             # Résultats avec design amélioré
             st.markdown("## ✨ Votre estimation")

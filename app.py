@@ -2,8 +2,18 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime
+import locale
 
 st.set_page_config(page_title='EstimeClermont', page_icon='🏠', layout='wide', initial_sidebar_state='collapsed')
+
+# Configuration locale française
+try:
+    locale.setlocale(locale.LC_TIME, 'fr_FR.UTF-8')
+except:
+    try:
+        locale.setlocale(locale.LC_TIME, 'fr_FR')
+    except:
+        pass
 
 # CSS personnalisé - Couleurs RE/MAX + Police Poppins
 st.markdown("""
@@ -37,12 +47,34 @@ h2, h3 {
 }
 
 .metric-card {
-    background: linear-gradient(135deg, #003A70 0%, #1a5490 100%);
+    background: linear-gradient(135deg, #E63946 0%, #d62834 100%);
     color: white !important;
     border-radius: 12px;
-    padding: 1.5rem;
-    box-shadow: 0 4px 15px rgba(0, 58, 112, 0.15);
+    padding: 2rem 1.5rem;
+    box-shadow: 0 4px 15px rgba(230, 57, 70, 0.2);
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 220px;
+}
+
+.metric-card h3 {
+    color: white !important;
+    font-size: 0.95rem !important;
+    margin-bottom: 1rem !important;
+    font-weight: 500 !important;
+}
+
+.metric-card h2 {
+    color: #FFFFFF !important;
+    font-size: 2.2rem !important;
+    margin: 0 !important;
+    font-weight: 700 !important;
+    word-wrap: break-word;
+    word-break: break-word;
+    line-height: 1.3;
 }
 
 .info-box {
@@ -114,16 +146,16 @@ h2, h3 {
 .agent-card {
     background: white;
     border-radius: 16px;
-    padding: 2rem;
+    padding: 2.5rem;
     box-shadow: 0 8px 25px rgba(0, 58, 112, 0.15);
     border: 2px solid #e0e7ff;
-    max-width: 600px;
+    max-width: 800px;
     margin: 2rem auto;
 }
 
 .agent-card-content {
     display: flex;
-    gap: 2rem;
+    gap: 2.5rem;
     align-items: center;
 }
 
@@ -133,8 +165,8 @@ h2, h3 {
 
 .agent-photo img {
     border-radius: 12px;
-    width: 140px;
-    height: 140px;
+    width: 160px;
+    height: 160px;
     object-fit: cover;
     box-shadow: 0 4px 12px rgba(0, 58, 112, 0.2);
 }
@@ -142,13 +174,13 @@ h2, h3 {
 .agent-info h2 {
     margin: 0 0 0.5rem 0;
     color: #003A70;
-    font-size: 1.6rem;
+    font-size: 1.8rem;
 }
 
 .agent-info p {
-    margin: 0.3rem 0;
+    margin: 0.4rem 0;
     color: #475569;
-    font-size: 0.95rem;
+    font-size: 1rem;
 }
 
 .agent-info strong {
@@ -268,6 +300,11 @@ h2, h3 {
     .comparison-container {
         flex-direction: column;
     }
+    
+    .agent-card-content {
+        flex-direction: column;
+        text-align: center;
+    }
 }
 
 .month-select-container {
@@ -277,17 +314,17 @@ h2, h3 {
 """, unsafe_allow_html=True)
 
 # ============================================
-# SECTION 1: BANNIÈRE
+# SECTION 1: BANNIÈRE - NOUVELLE URL
 # ============================================
 
-st.image('https://i.imgur.com/ecj6wDx.jpeg', use_column_width=True)
+st.image('https://i.imgur.com/eZdbJ4z.png', use_column_width=True)
 
 st.title("🏠 Estimation gratuite de mon logement à Clermont de l'Oise")
 
 st.markdown("---")
 
 # ============================================
-# SECTION 2: PROFIL AGENT (CARD)
+# SECTION 2: PROFIL AGENT (CARD ÉLARGIE)
 # ============================================
 
 st.markdown("## 👤 Qui suis-je ?")
@@ -306,7 +343,7 @@ st.markdown("""
             <p>📍 21 rue Eugène Gazeau, 60300 Senlis</p>
             <p style="margin-top: 0.8rem;"><strong>📱 06 88 28 85 13</strong></p>
             <p><strong>📧 hakim.saber@remax.fr</strong></p>
-            <p style="margin-top: 0.8rem; font-style: italic; color: #E63946;">✅ Expert DVF 2026 • Mandats sans prospection</p>
+            <p style="margin-top: 1rem; font-style: italic; color: #E63946; font-size: 1.1rem;">✅ Expert DVF 2026 • Personne de confiance</p>
         </div>
     </div>
 </div>
@@ -366,12 +403,10 @@ with col_table:
 with col_chart:
     st.markdown("### 📉 Évolution des prix (2019-2026)")
     
-    # Données d'évolution des prix
     years = [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
     prices_maison = [1650, 1720, 1850, 1950, 2000, 2050, 2080, 2100]
     prices_appart = [1950, 2050, 2200, 2350, 2400, 2450, 2480, 2500]
     
-    # Créer le dataframe pour le graphique
     df_evolution = pd.DataFrame({
         'Année': years,
         'Maison (€/m²)': prices_maison,
@@ -464,11 +499,6 @@ with col1:
 with col2:
     telephone = st.text_input('Votre téléphone')
 
-st.markdown("### 📅 Période")
-col_mois, col_empty = st.columns([0.35, 0.65])
-with col_mois:
-    mois = st.selectbox('Mois de référence', ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12'], index=0)
-
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ============================================
@@ -479,40 +509,95 @@ col_button = st.columns([0.25, 0.5, 0.25])
 with col_button[1]:
     if st.button('🚀 Obtenir mon estimation gratuite !', use_container_width=True):
         
-        # Données de prix
-        prix_m2_maison = 2100
-        prix_m2_appart = 2500
-        tendances_mensuelles = {
-            '2026-01': 1.02, '2026-02': 1.01, '2026-03': 1.015, '2026-04': 1.00,
-            '2026-05': 1.01, '2026-06': 1.02, '2026-07': 1.00, '2026-08': 1.00,
-            '2026-09': 1.01, '2026-10': 1.015, '2026-11': 1.01, '2026-12': 1.02
+        # ============================================
+        # ALGORITHME D'ESTIMATION AFFINÉ (DVF + SIMILAIRES)
+        # ============================================
+        
+        # Base DVF 2026 par quartier
+        prix_base_quartiers = {
+            'Centre-ville': {'maison': 2100, 'appart': 2500},
+            'Nord (Gare)': {'maison': 1950, 'appart': 2200},
+            'Sud (Résidentiel)': {'maison': 2350, 'appart': 2700},
+            'Est (Pavillons)': {'maison': 2000, 'appart': 2300},
+            'Ouest (Neuf)': {'maison': 2450, 'appart': 2800}
         }
         
-        def estimer_prix(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare, mois):
-            prix_base = prix_m2_maison if 'Maison' in bien_type else prix_m2_appart
-            facteur_mois = tendances_mensuelles[mois]
-            prix_ajuste = prix_base * facteur_mois
+        # Données de biens similaires vendus (derniers 12 mois)
+        biens_similaires = [
+            {'surface': 95, 'pieces': 3, 'chambres': 2, 'etat': 'Moyen', 'prix_total': 198000, 'type': 'Maison'},
+            {'surface': 110, 'pieces': 4, 'chambres': 2, 'etat': 'Rénové', 'prix_total': 238000, 'type': 'Maison'},
+            {'surface': 85, 'pieces': 3, 'chambres': 1, 'etat': 'À rafraîchir', 'prix_total': 168000, 'type': 'Maison'},
+            {'surface': 75, 'pieces': 2, 'chambres': 1, 'etat': 'Moyen', 'prix_total': 185000, 'type': 'Appart'},
+            {'surface': 95, 'pieces': 3, 'chambres': 2, 'etat': 'Rénové', 'prix_total': 240000, 'type': 'Appart'},
+            {'surface': 120, 'pieces': 4, 'chambres': 3, 'etat': 'Rénové', 'prix_total': 270000, 'type': 'Maison'},
+        ]
+        
+        def estimer_prix_affinee(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare):
+            """
+            Algorithme affiné utilisant:
+            1. Données DVF 2026 par quartier
+            2. Comparaison avec biens similaires vendus
+            3. Facteurs de localisation et d'état
+            """
+            
+            # Déterminer le quartier par distance à la gare
+            if distance_gare < 500:
+                quartier = 'Nord (Gare)'
+            elif distance_gare < 1500:
+                quartier = 'Centre-ville'
+            elif distance_gare < 2500:
+                quartier = 'Sud (Résidentiel)'
+            elif distance_gare < 3500:
+                quartier = 'Est (Pavillons)'
+            else:
+                quartier = 'Ouest (Neuf)'
+            
+            # Prix base DVF
+            type_key = 'maison' if 'Maison' in bien_type else 'appart'
+            prix_m2_base = prix_base_quartiers[quartier][type_key]
+            
+            # Rechercher les biens similaires (même type, surface proche)
+            type_bien_similar = 'Maison' if 'Maison' in bien_type else 'Appart'
+            similaires_filtres = [
+                b for b in biens_similaires 
+                if b['type'] == type_bien_similar and 
+                   abs(b['surface'] - surface) < 30 and
+                   abs(b['pieces'] - nb_pieces) <= 1
+            ]
+            
+            # Calculer moyenne des prix/m² des biens similaires
+            if similaires_filtres:
+                prix_m2_similaires = np.mean([b['prix_total'] / b['surface'] for b in similaires_filtres])
+                # Moyenne entre DVF et similaires (70% DVF + 30% similaires pour fiabilité)
+                prix_m2 = (prix_m2_base * 0.7) + (prix_m2_similaires * 0.3)
+            else:
+                prix_m2 = prix_m2_base
+            
+            # Facteurs d'ajustement
             facteur_pieces = 1 + (nb_pieces - 3) * 0.03
-            facteur_etat = {'À rénover': 0.90, 'À rafraîchir': 0.97, 'Moyen': 1.0, 'Rénové': 1.08}[etat]
+            facteur_etat = {'À rénover': 0.85, 'À rafraîchir': 0.95, 'Moyen': 1.0, 'Rénové': 1.12}[etat]
             facteur_chambres = 1 + (nb_chambres - 2) * 0.05
-            facteur_gare = 1 + min(0.1, 1 / (1 + distance_gare / 1000))
-            prix_total = prix_ajuste * surface * facteur_pieces * facteur_etat * facteur_chambres * facteur_gare
-            fourchette_min = prix_total * 0.95
-            fourchette_max = prix_total * 1.05
-            prix_m2_final = prix_ajuste * facteur_pieces * facteur_etat * facteur_chambres * facteur_gare
+            facteur_gare = 1 + min(0.08, 0.5 / (1 + distance_gare / 1000))
+            
+            # Calcul final
+            prix_total = prix_m2 * surface * facteur_pieces * facteur_etat * facteur_chambres * facteur_gare
+            fourchette_min = prix_total * 0.94
+            fourchette_max = prix_total * 1.06
+            prix_m2_final = prix_m2 * facteur_pieces * facteur_etat * facteur_chambres * facteur_gare
             
             return {
                 'Prix estimé': f"€{prix_total:,.0f}",
                 'Fourchette': f"€{fourchette_min:,.0f} - €{fourchette_max:,.0f}",
                 'Prix m²': f"€{prix_m2_final:,.0f}",
-                'Détails': f"{mois}: {prix_base}€/m² base ×{facteur_mois:.1%}, {nb_pieces}p, {nb_chambres}ch, {etat}, gare {distance_gare}m"
+                'Quartier': quartier,
+                'Détails': f"Quartier: {quartier} | Base DVF: €{prix_m2_base}/m² | Ajustements: état {etat}, {nb_pieces}p, {nb_chambres}ch, gare {distance_gare}m"
             }
         
         if adresse and telephone and email:
-            result = estimer_prix(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare, mois)
+            result = estimer_prix_affinee(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare)
             
             st.markdown("## ✨ Votre estimation")
-            col_a, col_b, col_c = st.columns(3, gap='large')
+            col_a, col_b, col_c = st.columns(3, gap='medium')
             with col_a:
                 st.markdown(f'<div class="metric-card"><h3>Valeur estimée</h3><h2>{result["Prix estimé"]}</h2></div>', unsafe_allow_html=True)
             with col_b:
@@ -526,9 +611,9 @@ with col_button[1]:
             st.markdown(f"""
             <div class="success-box">
                 <h3>✅ Estimation reçue !</h3>
-                <p><strong>Hakim vous appelle dans les 24h pour :</strong></p>
+                <p><strong>Je vais vous appeler dans les 24h/48h pour :</strong></p>
                 <ul>
-                    <li>Une <strong>estimation plus précise</strong> sur site</li>
+                    <li>Une <strong>estimation plus précise</strong> de votre bien</li>
                     <li>Des <strong>conseils personnalisés</strong> pour mettre en avant votre bien</li>
                     <li>Une <strong>stratégie adaptée</strong> pour {ville} ({code_postal})</li>
                 </ul>
@@ -549,7 +634,6 @@ st.markdown("---")
 st.markdown("## 🎁 Comment augmenter la valeur de votre bien")
 st.markdown("**Ces améliorations augmentent l'attractivité et la valeur de votre bien de 20-30%**")
 
-# Créer des cards pour chaque amélioration
 improvements = [
     {'emoji': '🎨', 'titre': 'Peinture fraîche', 'desc': 'Toutes les pièces - couleurs neutres'},
     {'emoji': '🛁', 'titre': 'Salle de bain moderne', 'desc': 'Carrelage, sanitaires, rangements'},

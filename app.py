@@ -1,18 +1,10 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import requests
 import math
 
 st.set_page_config(page_title='EstimeClermont', page_icon='🏠', layout='wide', initial_sidebar_state='collapsed')
-
-# Essayer d'importer geopy, sinon utiliser fallback
-try:
-    from geopy.geocoders import Nominatim
-    from geopy.exc import GeocoderTimedOut
-    GEOPY_AVAILABLE = True
-except ImportError:
-    GEOPY_AVAILABLE = False
-    st.warning("⚠️ Calcul de distance automatique désactivé (dépendance manquante)")
 
 # CSS personnalisé - Couleurs RE/MAX + Police Poppins
 st.markdown("""
@@ -48,32 +40,29 @@ h2, h3 {
     background: linear-gradient(135deg, #E63946 0%, #d62834 100%);
     color: white !important;
     border-radius: 12px;
-    padding: 2rem 1.5rem;
+    padding: 2rem 1rem;
     box-shadow: 0 4px 15px rgba(230, 57, 70, 0.2);
     text-align: center;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    align-items: center;
-    min-height: 220px;
-    min-width: 200px;
+    min-height: 180px;
 }
 
 .metric-card h3 {
     color: white !important;
     font-size: 0.95rem !important;
-    margin-bottom: 1rem !important;
+    margin-bottom: 0.8rem !important;
     font-weight: 500 !important;
 }
 
 .metric-card h2 {
-    color: #FFFFFF !important;
-    font-size: 2.2rem !important;
+    color: white !important;
+    font-size: 2rem !important;
     margin: 0 !important;
     font-weight: 700 !important;
     word-wrap: break-word;
     word-break: break-word;
-    line-height: 1.3;
 }
 
 .info-box {
@@ -200,41 +189,55 @@ h2, h3 {
 .social-links a:hover {
     transform: scale(1.2);
 }
-
-.algo-card {
-    background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%);
-    border-left: 4px solid #ff6b35;
-    border-radius: 8px;
-    padding: 1.2rem;
-    margin-top: 0.5rem;
-}
-
-.algo-card strong {
-    color: #003A70;
-}
-
-.algo-step {
-    display: flex;
-    align-items: center;
-    margin: 0.6rem 0;
-    font-size: 0.95rem;
-}
-
-.algo-step-num {
-    background: #E63946;
-    color: white;
-    border-radius: 50%;
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-right: 0.8rem;
-    font-weight: bold;
-    flex-shrink: 0;
-}
 </style>
 """, unsafe_allow_html=True)
+
+# ============================
+# Fonctions distance automatique
+# ============================
+
+GARE_LAT = 49.3833  # exemple à ajuster si besoin
+GARE_LON = 2.4167
+
+def haversine(lat1, lon1, lat2, lon2):
+    R = 6371000
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    return R * c
+
+def geocode_adresse(adresse_complete):
+    if not adresse_complete:
+        return None, None
+    url = "https://nominatim.openstreetmap.org/search"
+    params = {
+        "q": adresse_complete,
+        "format": "json",
+        "addressdetails": 1,
+        "limit": 1
+    }
+    headers = {"User-Agent": "EstimeClermont/1.0"}
+    try:
+        r = requests.get(url, params=params, headers=headers, timeout=5)
+        data = r.json()
+        if not 
+            return None, None
+        lat = float(data[0]["lat"])
+        lon = float(data[0]["lon"])
+        return lat, lon
+    except Exception:
+        return None, None
+
+def calculer_distance_gare(adresse_complete, ville, code_postal):
+    adresse_full = f"{adresse_complete}, {code_postal} {ville}, France"
+    lat, lon = geocode_adresse(adresse_full)
+    if lat is None:
+        return None
+    distance_m = haversine(lat, lon, GARE_LAT, GARE_LON)
+    return int(distance_m)
 
 # Header avec bannière Clermont
 st.image('https://i.imgur.com/ecj6wDx.jpeg', use_column_width=True)
@@ -245,10 +248,10 @@ with col_logo:
 with col_title:
     st.title("🏠 Estimation gratuite de mon logement à Clermont de l'Oise")
 
-# Profil agent - Photo remplacée
+# Profil agent
 col_photo1, col_photo2 = st.columns([0.8, 2.2])
 with col_photo1:
-    st.image('https://i.imgur.com/T0qp7Po.jpeg', width=150, caption='Hakim SABER')
+    st.image('https://i.imgur.com/KsQopoC.jpeg', width=150, caption='Hakim SABER')
 with col_photo2:
     st.markdown("### ***Hakim SABER***")
     st.markdown("**Agence RE/MAX Serenity**")
@@ -257,13 +260,9 @@ with col_photo2:
 
 st.markdown("---")
 
-# ============================================
-# SECTION: AVANTAGES AMÉLIORÉE AVEC ALGO
-# ============================================
-
+# 3 Avantages avec design amélioré
 st.markdown("## Pourquoi choisir notre estimation ?")
 cols = st.columns(3, gap='large')
-
 with cols[0]:
     st.markdown("""
     <div class="advantage-card">
@@ -271,7 +270,6 @@ with cols[0]:
         <p>Données précises quartier par quartier (DVF 2026)</p>
     </div>
     """, unsafe_allow_html=True)
-
 with cols[1]:
     st.markdown("""
     <div class="advantage-card">
@@ -279,7 +277,6 @@ with cols[1]:
         <p>Résultat en 30 secondes</p>
     </div>
     """, unsafe_allow_html=True)
-
 with cols[2]:
     st.markdown("""
     <div class="advantage-card">
@@ -288,28 +285,6 @@ with cols[2]:
     </div>
     """, unsafe_allow_html=True)
 
-# Afficher l'algorithme affiné
-st.markdown("""
-<div class="algo-card">
-    <strong>🔬 Notre Algorithme Affiné (3 niveaux de sophistication)</strong>
-    <div class="algo-step">
-        <div class="algo-step-num">1</div>
-        <div><strong>Données DVF 2026</strong> - Base de référence officielle par quartier à Clermont</div>
-    </div>
-    <div class="algo-step">
-        <div class="algo-step-num">2</div>
-        <div><strong>Biens Comparables</strong> - Analyse des dernières ventes similaires (type, surface, pièces)</div>
-    </div>
-    <div class="algo-step">
-        <div class="algo-step-num">3</div>
-        <div><strong>Facteurs d'Ajustement</strong> - État du bien, localisation, proximité gare, orientation</div>
-    </div>
-    <p style="margin: 0.8rem 0 0 0; font-size: 0.9rem; color: #555;">
-        <em>Fusion intelligente : 70% données DVF + 30% comparables = Prix vraiment représentatif de la réalité du marché</em>
-    </p>
-</div>
-""", unsafe_allow_html=True)
-
 st.markdown("---")
 
 # Données IA
@@ -317,51 +292,9 @@ prix_m2_maison = 2100
 prix_m2_appart = 2500
 tendances_mensuelles = {
     '2026-01': 1.02, '2026-02': 1.01, '2026-03': 1.015, '2026-04': 1.00,
-    '2026-05': 1.01, '2026-06': 1.02, '2026-07': 1.00, '2026-08': 1.00,
+    '2026-05': 1.01', '2026-06': 1.02, '2026-07': 1.00, '2026-08': 1.00,
     '2026-09': 1.01, '2026-10': 1.015, '2026-11': 1.01, '2026-12': 1.02
 }
-
-# ============================================
-# FONCTION: CALCUL DISTANCE GARE AUTOMATIQUE
-# ============================================
-
-def calculer_distance_gare(adresse_bien, ville='Clermont', code_postal='60600'):
-    """
-    Calcule la distance entre l'adresse du bien et la gare de Clermont
-    Retourne la distance en mètres
-    """
-    if not GEOPY_AVAILABLE:
-        return None, None
-    
-    try:
-        geolocator = Nominatim(user_agent="immobilier_clermont_v1", timeout=5)
-        
-        # Coordonnées gare de Clermont de l'Oise
-        gare_lat, gare_lon = 49.2047, 2.3715
-        
-        # Géocoder l'adresse du bien
-        adresse_complete = f"{adresse_bien}, {code_postal} {ville}, France"
-        location = geolocator.geocode(adresse_complete)
-        
-        if location:
-            bien_lat, bien_lon = location.latitude, location.longitude
-            
-            # Formule haversine pour distance en mètres
-            R = 6371000  # Rayon de la Terre en mètres
-            lat1_rad = math.radians(gare_lat)
-            lat2_rad = math.radians(bien_lat)
-            delta_lat = math.radians(bien_lat - gare_lat)
-            delta_lon = math.radians(bien_lon - gare_lon)
-            
-            a = math.sin(delta_lat/2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lon/2)**2
-            c = 2 * math.asin(math.sqrt(a))
-            distance = R * c
-            
-            return int(distance), location.address
-        else:
-            return None, None
-    except Exception as e:
-        return None, None
 
 def estimer_prix(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare, mois):
     prix_base = prix_m2_maison if bien_type == 'maison' else prix_m2_appart
@@ -376,9 +309,9 @@ def estimer_prix(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare
     fourchette_max = prix_total * 1.05
     return {
         'Prix estimé': f"€{prix_total:,.0f}",
-        'Fourchette': f"€{fourchette_min:,.0f} - €{fourchette_max:,.0f}",
+        'Fourchette': f"€{fourchette_min:,.0f}",
         'Prix m²': f"€{prix_ajuste * facteur_pieces * facteur_etat * facteur_chambres * facteur_gare:,.0f}",
-        'Détails': f"{mois}: {prix_base}€/m² base ×{facteur_mois:.1%}, {nb_pieces}p, {nb_chambres}ch, {etat}, gare {distance_gare}m"
+        'Détails': f"{mois}: {prix_base}€/m² base ×{facteur_mois:.1%}, {nb_pieces}p, {nb_chambres}ch, {etat}, gare{distance_gare}m"
     }
 
 # Formulaire avec sections
@@ -405,18 +338,23 @@ with col1:
     code_postal = st.text_input('📮 Code postal', value='60600')
 with col2:
     ville = st.text_input('🏘️ Ville', value='Clermont')
-    
-    # Calcul automatique distance gare
-    if adresse and GEOPY_AVAILABLE:
-        distance_gare_auto, adresse_validee = calculer_distance_gare(adresse, ville, code_postal)
-        if distance_gare_auto:
-            st.info(f"✅ Distance gare détectée: {distance_gare_auto}m")
-            distance_gare = distance_gare_auto
+
+    # Distance à la gare (calcul auto + modifiable)
+    if "distance_gare" not in st.session_state:
+        st.session_state.distance_gare = 1000
+
+    distance_gare = st.number_input('🚂 Distance à la gare (m)', 0, 5000, st.session_state.distance_gare, step=100)
+
+    if st.button("🔍 Calculer distance gare automatiquement"):
+        if adresse and ville and code_postal:
+            dist_calc = calculer_distance_gare(adresse, ville, code_postal)
+            if dist_calc is not None:
+                st.session_state.distance_gare = dist_calc
+                st.success(f"Distance estimée à la gare : ~{dist_calc} m")
+            else:
+                st.warning("Impossible de calculer la distance automatiquement. Vérifiez l'adresse.")
         else:
-            st.warning("⚠️ Adresse non trouvée. Entrez la distance manuellement")
-            distance_gare = st.number_input('🚂 Distance à la gare (m)', 0, 5000, 1000, step=100)
-    else:
-        distance_gare = st.number_input('🚂 Distance à la gare (m)', 0, 5000, 1000, step=100)
+            st.warning("Veuillez renseigner adresse, ville et code postal.")
 
 # Section 3: Coordonnées
 st.markdown("### Vos coordonnées")
@@ -443,20 +381,12 @@ col_button = st.columns([0.3, 0.4, 0.3])
 with col_button[1]:
     if st.button('🚀 Obtenir mon estimation gratuite !', use_container_width=True):
         if adresse and telephone and email:
-            result = estimer_prix(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare, mois)
-            
-            # Formater le mois en français
-            months_fr = {
-                '2026-01': 'Janvier 2026', '2026-02': 'Février 2026', '2026-03': 'Mars 2026',
-                '2026-04': 'Avril 2026', '2026-05': 'Mai 2026', '2026-06': 'Juin 2026',
-                '2026-07': 'Juillet 2026', '2026-08': 'Août 2026', '2026-09': 'Septembre 2026',
-                '2026-10': 'Octobre 2026', '2026-11': 'Novembre 2026', '2026-12': 'Décembre 2026'
-            }
-            mois_display = months_fr.get(mois, mois)
+            distance_utilisee = st.session_state.get("distance_gare", distance_gare)
+            result = estimer_prix(bien_type, surface, nb_pieces, nb_chambres, etat, distance_utilisee, mois)
             
             # Résultats avec design amélioré
-            st.markdown(f"## ✨ Votre estimation - {mois_display}")
-            col_a, col_b, col_c = st.columns(3, gap='medium')
+            st.markdown("## ✨ Votre estimation")
+            col_a, col_b, col_c = st.columns(3, gap='small')
             with col_a:
                 st.markdown(f"""
                 <div class="metric-card">

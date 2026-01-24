@@ -1,23 +1,18 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from datetime import datetime
-import locale
-from geopy.geocoders import Nominatim
-from geopy.exc import GeocoderTimedOut
 import math
-import time
 
 st.set_page_config(page_title='EstimeClermont', page_icon='🏠', layout='wide', initial_sidebar_state='collapsed')
 
-# Configuration locale française
+# Essayer d'importer geopy, sinon utiliser fallback
 try:
-    locale.setlocale(locale.LC_TIME, 'fr_FR.UTF-8')
-except:
-    try:
-        locale.setlocale(locale.LC_TIME, 'fr_FR')
-    except:
-        pass
+    from geopy.geocoders import Nominatim
+    from geopy.exc import GeocoderTimedOut
+    GEOPY_AVAILABLE = True
+except ImportError:
+    GEOPY_AVAILABLE = False
+    st.warning("⚠️ Calcul de distance automatique désactivé (dépendance manquante)")
 
 # CSS personnalisé - Couleurs RE/MAX + Police Poppins
 st.markdown("""
@@ -335,6 +330,9 @@ def calculer_distance_gare(adresse_bien, ville='Clermont', code_postal='60600'):
     Calcule la distance entre l'adresse du bien et la gare de Clermont
     Retourne la distance en mètres
     """
+    if not GEOPY_AVAILABLE:
+        return None, None
+    
     try:
         geolocator = Nominatim(user_agent="immobilier_clermont_v1", timeout=5)
         
@@ -362,8 +360,6 @@ def calculer_distance_gare(adresse_bien, ville='Clermont', code_postal='60600'):
             return int(distance), location.address
         else:
             return None, None
-    except GeocoderTimedOut:
-        return None, None
     except Exception as e:
         return None, None
 
@@ -411,7 +407,7 @@ with col2:
     ville = st.text_input('🏘️ Ville', value='Clermont')
     
     # Calcul automatique distance gare
-    if adresse:
+    if adresse and GEOPY_AVAILABLE:
         distance_gare_auto, adresse_validee = calculer_distance_gare(adresse, ville, code_postal)
         if distance_gare_auto:
             st.info(f"✅ Distance gare détectée: {distance_gare_auto}m")

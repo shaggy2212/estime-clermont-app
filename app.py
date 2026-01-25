@@ -354,7 +354,7 @@ st.title("🏠 Estimation gratuite de mon logement à Clermont de l'Oise")
 st.markdown("---")
 
 # ============================================
-# SECTION 2: PROFIL AGENT (MOD 3: NOUVELLE PHOTO)
+# SECTION 2: PROFIL AGENT
 # ============================================
 
 st.markdown("## 👤 Qui suis-je ?")
@@ -382,13 +382,12 @@ st.markdown("""
 st.markdown("---")
 
 # ============================================
-# SECTION 3: AVANTAGES + MOD 5: ALGORITHME
+# SECTION 3: AVANTAGES + ALGORITHME
 # ============================================
 
 st.markdown("## 💎 Pourquoi choisir mon estimation ?")
 cols = st.columns(2, gap='large')
 
-# Colonne 1: Les 3 avantages
 with cols[0]:
     st.markdown("""
     <div class="advantage-card">
@@ -411,7 +410,6 @@ with cols[0]:
     </div>
     """, unsafe_allow_html=True)
 
-# Colonne 2: Algorithme affiné
 with cols[1]:
     st.markdown("""
     <div class="algorithm-card">
@@ -534,31 +532,67 @@ etat = st.selectbox('État du bien', ['À rénover', 'À rafraîchir', 'Moyen', 
 st.markdown("### 📍 Localisation")
 col1, col2 = st.columns(2, gap='large')
 with col1:
-    adresse_input = st.text_input('Adresse complète du bien', key='adresse_input')
+    adresse_input = st.text_input('Adresse complète du bien', key='adresse_input', placeholder='Ex: 3 Rue Émile Bousseau')
     
-    # Autocomplétion d'adresses en temps réel
+    # ========== AUTOCOMPLÉTION AMÉLIORÉE ==========
     adresse = adresse_input
-    if len(adresse_input) > 3:
+    suggestions = []
+    
+    if len(adresse_input) > 2:
         try:
             response = requests.get('https://nominatim.openstreetmap.org/search', 
-                params={'q': f"{adresse_input}, 60600 Clermont, France", 'format': 'json', 'limit': 5},
+                params={
+                    'q': f"{adresse_input}, Clermont-de-l'Oise, France",
+                    'format': 'json',
+                    'limit': 10,
+                    'addressdetails': 1
+                },
                 headers={'User-Agent': 'EstimeClermont/1.0'},
                 timeout=3)
-            if response.status_code == 200 and response.json():
-                suggestions_adresses = [r['display_name'] for r in response.json()]
-                if suggestions_adresses:
-                    st.markdown("**🔍 Suggestions :**")
-                    adresse_selectionnee = st.selectbox(
-                        'Sélectionnez une adresse',
-                        suggestions_adresses,
-                        label_visibility='collapsed',
-                        key='adresse_select'
-                    )
-                    adresse = adresse_selectionnee
+            
+            if response.status_code == 200:
+                for result in response.json():
+                    address = result.get('address', {})
+                    
+                    # Vérifier que c'est à Clermont
+                    if 'Clermont' not in result.get('display_name', ''):
+                        continue
+                    
+                    # Retirer les POI (commerces, amenities, etc)
+                    osm_class = result.get('class', '')
+                    if osm_class in ['amenity', 'shop', 'office', 'leisure', 'tourism']:
+                        continue
+                    
+                    # Construire l'adresse simplifiée
+                    house_number = address.get('house_number', '')
+                    road = address.get('road', '')
+                    postcode = address.get('postcode', '60600')
+                    
+                    if road:
+                        if house_number:
+                            simple_addr = f"{house_number}, {road}, {postcode}, Clermont de l'Oise"
+                        else:
+                            simple_addr = f"{road}, {postcode}, Clermont de l'Oise"
+                        
+                        if simple_addr not in suggestions:
+                            suggestions.append(simple_addr)
         except:
             pass
     
+    # Afficher les suggestions en boutons cliquables
+    if suggestions:
+        st.markdown("**🔍 Suggestions :**")
+        for suggestion in suggestions[:5]:
+            if st.button(suggestion, key=f"addr_{suggestion}", use_container_width=True):
+                adresse = suggestion
+                st.session_state.adresse_selected = suggestion
+    
+    # Si une adresse a été sélectionnée
+    if 'adresse_selected' in st.session_state:
+        adresse = st.session_state.adresse_selected
+    
     code_postal = st.text_input('Code postal', value='60600')
+
 with col2:
     ville = st.text_input('Ville', value='Clermont')
     distance_gare = st.number_input('Distance à la gare (m)', 0, 5000, 1000, step=100)
@@ -580,7 +614,6 @@ col_button = st.columns([0.25, 0.5, 0.25])
 with col_button[1]:
     if st.button('🚀 Obtenir mon estimation gratuite !', use_container_width=True):
         
-        # Base DVF 2026 par quartier
         prix_base_quartiers = {
             'Centre-ville': {'maison': 2100, 'appart': 2500},
             'Nord (Gare)': {'maison': 1950, 'appart': 2200},
@@ -589,7 +622,6 @@ with col_button[1]:
             'Ouest (Neuf)': {'maison': 2450, 'appart': 2800}
         }
         
-        # MOD 4: Biens similaires améliorés
         biens_similaires = [
             {'surface': 95, 'pieces': 3, 'chambres': 2, 'etat': 'Moyen', 'prix_total': 198000, 'type': 'Maison', 'quartier': 'Centre', 'date_vente': '2025-12'},
             {'surface': 110, 'pieces': 4, 'chambres': 2, 'etat': 'Rénové', 'prix_total': 238000, 'type': 'Maison', 'quartier': 'Sud', 'date_vente': '2025-11'},
@@ -600,9 +632,7 @@ with col_button[1]:
         ]
         
         def estimer_prix_affinee(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare, mois):
-            """MOD 4: Algorithme affiné avec 3 niveaux"""
             
-            # Déterminer le quartier par distance à la gare
             if distance_gare < 500:
                 quartier = 'Nord (Gare)'
             elif distance_gare < 1500:
@@ -614,11 +644,9 @@ with col_button[1]:
             else:
                 quartier = 'Ouest (Neuf)'
             
-            # Prix base DVF
             type_key = 'maison' if 'Maison' in bien_type else 'appart'
             prix_m2_base = prix_base_quartiers[quartier][type_key]
             
-            # Rechercher les biens similaires
             type_bien_similar = 'Maison' if 'Maison' in bien_type else 'Appart'
             similaires_filtres = [
                 b for b in biens_similaires 
@@ -627,21 +655,17 @@ with col_button[1]:
                    abs(b['pieces'] - nb_pieces) <= 1
             ]
             
-            # Calculer moyenne des prix/m² des biens similaires
             if similaires_filtres:
                 prix_m2_similaires = np.mean([b['prix_total'] / b['surface'] for b in similaires_filtres])
-                # 60% DVF + 40% biens similaires
                 prix_m2 = (prix_m2_base * 0.6) + (prix_m2_similaires * 0.4)
             else:
                 prix_m2 = prix_m2_base
             
-            # Facteurs d'ajustement
             facteur_pieces = 1 + (nb_pieces - 3) * 0.03
             facteur_etat = {'À rénover': 0.85, 'À rafraîchir': 0.95, 'Moyen': 1.0, 'Rénové': 1.12}[etat]
             facteur_chambres = 1 + (nb_chambres - 2) * 0.05
             facteur_gare = 1 + min(0.08, 0.5 / (1 + distance_gare / 1000))
             
-            # Calcul final
             prix_total = prix_m2 * surface * facteur_pieces * facteur_etat * facteur_chambres * facteur_gare
             fourchette_min = prix_total * 0.94
             fourchette_max = prix_total * 1.06
@@ -656,13 +680,11 @@ with col_button[1]:
             }
         
         if adresse and telephone and email:
-            mois = '2026-01'  # Par défaut
+            mois = '2026-01'
             result = estimer_prix_affinee(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare, mois)
             
-            # MOD 2: Affichage du mois de référence
             st.markdown(f"## ✨ Votre estimation - Référence: {mois}")
             
-            # MOD 1: Vignettes plus larges
             col_a, col_b, col_c = st.columns(3, gap='medium')
             with col_a:
                 st.markdown(f'<div class="metric-card"><h3>Valeur estimée</h3><h2>{result["Prix estimé"]}</h2></div>', unsafe_allow_html=True)

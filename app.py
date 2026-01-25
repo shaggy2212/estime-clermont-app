@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import requests
+import math
 from datetime import datetime
 import locale
 
@@ -50,7 +52,7 @@ h2, h3 {
     background: linear-gradient(135deg, #E63946 0%, #d62834 100%);
     color: white !important;
     border-radius: 12px;
-    padding: 2rem 1.5rem;
+    padding: 2.5rem 2rem;
     box-shadow: 0 4px 15px rgba(230, 57, 70, 0.2);
     text-align: center;
     display: flex;
@@ -58,6 +60,8 @@ h2, h3 {
     justify-content: center;
     align-items: center;
     min-height: 220px;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 .metric-card h3 {
@@ -69,12 +73,11 @@ h2, h3 {
 
 .metric-card h2 {
     color: #FFFFFF !important;
-    font-size: 2.2rem !important;
+    font-size: 2.3rem !important;
     margin: 0 !important;
     font-weight: 700 !important;
-    word-wrap: break-word;
-    word-break: break-word;
     line-height: 1.3;
+    max-width: 100%;
 }
 
 .info-box {
@@ -82,6 +85,33 @@ h2, h3 {
     border-left: 4px solid #003A70;
     border-radius: 8px;
     padding: 1rem;
+}
+
+.algorithm-card {
+    background: linear-gradient(135deg, #fff5f0 0%, #ffe8e0 100%);
+    border-left: 4px solid #E63946;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 15px rgba(230, 57, 70, 0.1);
+    text-align: left;
+    transition: all 0.3s ease;
+}
+
+.algorithm-card h4 {
+    color: #E63946 !important;
+    margin-top: 0 !important;
+    font-size: 1.1rem !important;
+}
+
+.algorithm-card ul {
+    margin: 1rem 0;
+    padding-left: 1.5rem;
+}
+
+.algorithm-card li {
+    margin: 0.5rem 0;
+    color: #003A70;
+    font-size: 0.95rem;
 }
 
 .stButton > button {
@@ -314,7 +344,7 @@ h2, h3 {
 """, unsafe_allow_html=True)
 
 # ============================================
-# SECTION 1: BANNIÈRE - NOUVELLE URL
+# SECTION 1: BANNIÈRE
 # ============================================
 
 st.image('https://i.imgur.com/eZdbJ4z.png', use_column_width=True)
@@ -324,7 +354,7 @@ st.title("🏠 Estimation gratuite de mon logement à Clermont de l'Oise")
 st.markdown("---")
 
 # ============================================
-# SECTION 2: PROFIL AGENT (CARD ÉLARGIE)
+# SECTION 2: PROFIL AGENT (MOD 3: NOUVELLE PHOTO)
 # ============================================
 
 st.markdown("## 👤 Qui suis-je ?")
@@ -333,7 +363,7 @@ st.markdown("""
 <div class="agent-card">
     <div class="agent-card-content">
         <div class="agent-photo">
-            <img src="https://i.imgur.com/KsQopoC.jpeg" alt="Hakim SABER">
+            <img src="https://i.imgur.com/T0qp7Po.jpeg" alt="Hakim SABER">
         </div>
         <div class="agent-info">
             <h2>Hakim SABER</h2>
@@ -352,11 +382,13 @@ st.markdown("""
 st.markdown("---")
 
 # ============================================
-# SECTION 3: AVANTAGES
+# SECTION 3: AVANTAGES + MOD 5: ALGORITHME
 # ============================================
 
 st.markdown("## 💎 Pourquoi choisir mon estimation ?")
-cols = st.columns(3, gap='large')
+cols = st.columns(2, gap='large')
+
+# Colonne 1: Les 3 avantages
 with cols[0]:
     st.markdown("""
     <div class="advantage-card">
@@ -364,18 +396,34 @@ with cols[0]:
         <p>Données DVF 2026 précises quartier par quartier à Clermont</p>
     </div>
     """, unsafe_allow_html=True)
-with cols[1]:
+    
     st.markdown("""
     <div class="advantage-card">
         <h3>⚡ En 30 secondes</h3>
         <p>Résultat immédiat + conseils personnalisés gratuits</p>
     </div>
     """, unsafe_allow_html=True)
-with cols[2]:
+    
     st.markdown("""
     <div class="advantage-card">
         <h3>🎯 Sans engagement</h3>
         <p>Confidentiel et gratuit - vous gardez le contrôle</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# Colonne 2: Algorithme affiné
+with cols[1]:
+    st.markdown("""
+    <div class="algorithm-card">
+        <h4>🧠 Algorithme Affiné (3 Niveaux)</h4>
+        <ul>
+            <li><strong>Niveau 1:</strong> Base DVF 2026 (données officielles cadastrales)</li>
+            <li><strong>Niveau 2:</strong> Biens similaires (dernières ventes du quartier)</li>
+            <li><strong>Niveau 3:</strong> Facteurs de localisation (gare, quartier, état)</li>
+        </ul>
+        <p style="color: #E63946; font-weight: 600; margin-top: 1rem; font-size: 0.9rem;">
+        🎯 Résultat: Un prix plus représentatif de la réalité du marché local
+        </p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -502,16 +550,12 @@ with col2:
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ============================================
-# SECTION 8: BOUTON CTA AGRANDI
+# SECTION 8: BOUTON CTA
 # ============================================
 
 col_button = st.columns([0.25, 0.5, 0.25])
 with col_button[1]:
     if st.button('🚀 Obtenir mon estimation gratuite !', use_container_width=True):
-        
-        # ============================================
-        # ALGORITHME D'ESTIMATION AFFINÉ (DVF + SIMILAIRES)
-        # ============================================
         
         # Base DVF 2026 par quartier
         prix_base_quartiers = {
@@ -522,23 +566,18 @@ with col_button[1]:
             'Ouest (Neuf)': {'maison': 2450, 'appart': 2800}
         }
         
-        # Données de biens similaires vendus (derniers 12 mois)
+        # MOD 4: Biens similaires améliorés
         biens_similaires = [
-            {'surface': 95, 'pieces': 3, 'chambres': 2, 'etat': 'Moyen', 'prix_total': 198000, 'type': 'Maison'},
-            {'surface': 110, 'pieces': 4, 'chambres': 2, 'etat': 'Rénové', 'prix_total': 238000, 'type': 'Maison'},
-            {'surface': 85, 'pieces': 3, 'chambres': 1, 'etat': 'À rafraîchir', 'prix_total': 168000, 'type': 'Maison'},
-            {'surface': 75, 'pieces': 2, 'chambres': 1, 'etat': 'Moyen', 'prix_total': 185000, 'type': 'Appart'},
-            {'surface': 95, 'pieces': 3, 'chambres': 2, 'etat': 'Rénové', 'prix_total': 240000, 'type': 'Appart'},
-            {'surface': 120, 'pieces': 4, 'chambres': 3, 'etat': 'Rénové', 'prix_total': 270000, 'type': 'Maison'},
+            {'surface': 95, 'pieces': 3, 'chambres': 2, 'etat': 'Moyen', 'prix_total': 198000, 'type': 'Maison', 'quartier': 'Centre', 'date_vente': '2025-12'},
+            {'surface': 110, 'pieces': 4, 'chambres': 2, 'etat': 'Rénové', 'prix_total': 238000, 'type': 'Maison', 'quartier': 'Sud', 'date_vente': '2025-11'},
+            {'surface': 85, 'pieces': 3, 'chambres': 1, 'etat': 'À rafraîchir', 'prix_total': 168000, 'type': 'Maison', 'quartier': 'Nord', 'date_vente': '2025-10'},
+            {'surface': 75, 'pieces': 2, 'chambres': 1, 'etat': 'Moyen', 'prix_total': 185000, 'type': 'Appart', 'quartier': 'Centre', 'date_vente': '2025-12'},
+            {'surface': 95, 'pieces': 3, 'chambres': 2, 'etat': 'Rénové', 'prix_total': 240000, 'type': 'Appart', 'quartier': 'Centre', 'date_vente': '2025-11'},
+            {'surface': 120, 'pieces': 4, 'chambres': 3, 'etat': 'Rénové', 'prix_total': 270000, 'type': 'Maison', 'quartier': 'Sud', 'date_vente': '2025-09'},
         ]
         
-        def estimer_prix_affinee(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare):
-            """
-            Algorithme affiné utilisant:
-            1. Données DVF 2026 par quartier
-            2. Comparaison avec biens similaires vendus
-            3. Facteurs de localisation et d'état
-            """
+        def estimer_prix_affinee(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare, mois):
+            """MOD 4: Algorithme affiné avec 3 niveaux"""
             
             # Déterminer le quartier par distance à la gare
             if distance_gare < 500:
@@ -556,7 +595,7 @@ with col_button[1]:
             type_key = 'maison' if 'Maison' in bien_type else 'appart'
             prix_m2_base = prix_base_quartiers[quartier][type_key]
             
-            # Rechercher les biens similaires (même type, surface proche)
+            # Rechercher les biens similaires
             type_bien_similar = 'Maison' if 'Maison' in bien_type else 'Appart'
             similaires_filtres = [
                 b for b in biens_similaires 
@@ -568,8 +607,8 @@ with col_button[1]:
             # Calculer moyenne des prix/m² des biens similaires
             if similaires_filtres:
                 prix_m2_similaires = np.mean([b['prix_total'] / b['surface'] for b in similaires_filtres])
-                # Moyenne entre DVF et similaires (70% DVF + 30% similaires pour fiabilité)
-                prix_m2 = (prix_m2_base * 0.7) + (prix_m2_similaires * 0.3)
+                # 60% DVF + 40% biens similaires
+                prix_m2 = (prix_m2_base * 0.6) + (prix_m2_similaires * 0.4)
             else:
                 prix_m2 = prix_m2_base
             
@@ -590,13 +629,17 @@ with col_button[1]:
                 'Fourchette': f"€{fourchette_min:,.0f} - €{fourchette_max:,.0f}",
                 'Prix m²': f"€{prix_m2_final:,.0f}",
                 'Quartier': quartier,
-                'Détails': f"Quartier: {quartier} | Base DVF: €{prix_m2_base}/m² | Ajustements: état {etat}, {nb_pieces}p, {nb_chambres}ch, gare {distance_gare}m"
+                'Détails': f"Quartier: {quartier} | Base DVF: €{prix_m2_base}/m² | Similaires: {len(similaires_filtres)} bien(s) | État: {etat}"
             }
         
         if adresse and telephone and email:
-            result = estimer_prix_affinee(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare)
+            mois = '2026-01'  # Par défaut
+            result = estimer_prix_affinee(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare, mois)
             
-            st.markdown("## ✨ Votre estimation")
+            # MOD 2: Affichage du mois de référence
+            st.markdown(f"## ✨ Votre estimation - Référence: {mois}")
+            
+            # MOD 1: Vignettes plus larges
             col_a, col_b, col_c = st.columns(3, gap='medium')
             with col_a:
                 st.markdown(f'<div class="metric-card"><h3>Valeur estimée</h3><h2>{result["Prix estimé"]}</h2></div>', unsafe_allow_html=True)
@@ -605,7 +648,7 @@ with col_button[1]:
             with col_c:
                 st.markdown(f'<div class="metric-card"><h3>Prix/m²</h3><h2>{result["Prix m²"]}</h2></div>', unsafe_allow_html=True)
             
-            st.markdown(f'<div class="info-box"><strong>Détails :</strong> {result["Détails"]}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="info-box"><strong>🎯 Détails :</strong> {result["Détails"]}</div>', unsafe_allow_html=True)
             st.balloons()
             
             st.markdown(f"""
@@ -628,7 +671,7 @@ with col_button[1]:
 st.markdown("---")
 
 # ============================================
-# SECTION 9: BONUS - COMMENT AUGMENTER LA VALEUR
+# SECTION 9: COMMENT AUGMENTER LA VALEUR
 # ============================================
 
 st.markdown("## 🎁 Comment augmenter la valeur de votre bien")

@@ -534,7 +534,30 @@ etat = st.selectbox('État du bien', ['À rénover', 'À rafraîchir', 'Moyen', 
 st.markdown("### 📍 Localisation")
 col1, col2 = st.columns(2, gap='large')
 with col1:
-    adresse = st.text_input('Adresse complète du bien')
+    adresse_input = st.text_input('Adresse complète du bien', key='adresse_input')
+    
+    # Autocomplétion d'adresses en temps réel
+    adresse = adresse_input
+    if len(adresse_input) > 3:
+        try:
+            response = requests.get('https://nominatim.openstreetmap.org/search', 
+                params={'q': f"{adresse_input}, 60600 Clermont, France", 'format': 'json', 'limit': 5},
+                headers={'User-Agent': 'EstimeClermont/1.0'},
+                timeout=3)
+            if response.status_code == 200 and response.json():
+                suggestions_adresses = [r['display_name'] for r in response.json()]
+                if suggestions_adresses:
+                    st.markdown("**🔍 Suggestions :**")
+                    adresse_selectionnee = st.selectbox(
+                        'Sélectionnez une adresse',
+                        suggestions_adresses,
+                        label_visibility='collapsed',
+                        key='adresse_select'
+                    )
+                    adresse = adresse_selectionnee
+        except:
+            pass
+    
     code_postal = st.text_input('Code postal', value='60600')
 with col2:
     ville = st.text_input('Ville', value='Clermont')

@@ -52,33 +52,35 @@ h2, h3 {
     background: linear-gradient(135deg, #E63946 0%, #d62834 100%);
     color: white !important;
     border-radius: 12px;
-    padding: 2.5rem 2rem;
+    padding: 1.5rem 1rem;
     box-shadow: 0 4px 15px rgba(230, 57, 70, 0.2);
     text-align: center;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    min-height: 220px;
+    min-height: 200px;
     word-break: break-word;
     overflow-wrap: break-word;
 }
 
 .metric-card h3 {
     color: white !important;
-    font-size: 0.95rem !important;
-    margin-bottom: 1rem !important;
+    font-size: 0.85rem !important;
+    margin-bottom: 0.8rem !important;
     font-weight: 500 !important;
 }
 
 .metric-card h2 {
     color: #FFFFFF !important;
-    font-size: 2.3rem !important;
+    font-size: 1.8rem !important;
     margin: 0 !important;
     font-weight: 700 !important;
-    line-height: 1.3;
+    line-height: 1.2;
     max-width: 100%;
+    word-wrap: break-word;
 }
+
 
 .info-box {
     background: linear-gradient(135deg, #e8f0ff 0%, #f0f4ff 100%);

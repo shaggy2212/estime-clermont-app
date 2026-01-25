@@ -83,8 +83,6 @@ h2, h3 {
     word-break: break-word;
 }
 
-
-
 .info-box {
     background: linear-gradient(135deg, #e8f0ff 0%, #f0f4ff 100%);
     border-left: 4px solid #003A70;
@@ -537,69 +535,7 @@ etat = st.selectbox('État du bien', ['À rénover', 'À rafraîchir', 'Moyen', 
 st.markdown("### 📍 Localisation")
 col1, col2 = st.columns(2, gap='large')
 with col1:
-    adresse_input = st.text_input('Adresse complète du bien', key='adresse_input', placeholder='Ex: 3 Rue Émile Bousseau')
-    
-    # ========== AUTOCOMPLÉTION AMÉLIORÉE ==========
-    adresse = adresse_input
-    suggestions = []
-    
-    if len(adresse_input) > 2:
-        try:
-            response = requests.get('https://nominatim.openstreetmap.org/search', 
-                params={
-                    'q': f"{adresse_input}, 60600 Clermont de l'Oise",
-                    'format': 'json',
-                    'limit': 15,
-                    'addressdetails': 1,
-                    'viewbox': '2.3,49.6,2.4,49.7',  # Coordonnées de Clermont
-                    'bounded': 1
-                },
-                headers={'User-Agent': 'EstimeClermont/1.0'},
-                timeout=5)
-            
-            if response.status_code == 200 and response.json():
-                for result in response.json():
-                    address = result.get('address', {})
-                    display_name = result.get('display_name', '')
-                    osm_class = result.get('class', '')
-                    osm_type = result.get('osm_type', '')
-                    
-                    # Vérifier que c'est à Clermont
-                    if 'Clermont' not in display_name and '60600' not in display_name:
-                        continue
-                    
-                    # Retirer les POI (commerces, amenities, etc)
-                    if osm_class in ['amenity', 'shop', 'office', 'leisure', 'tourism', 'building']:
-                        continue
-                    
-                    # Construire l'adresse simplifiée
-                    house_number = address.get('house_number', '')
-                    road = address.get('road', '')
-                    postcode = address.get('postcode', '60600')
-                    
-                    if road:
-                        if house_number:
-                            simple_addr = f"{house_number}, {road}, {postcode}, Clermont de l'Oise"
-                        else:
-                            simple_addr = f"{road}, {postcode}, Clermont de l'Oise"
-                        
-                        if simple_addr not in suggestions:
-                            suggestions.append(simple_addr)
-        except Exception as e:
-            pass
-    
-    # Afficher les suggestions en boutons cliquables
-    if suggestions:
-        st.markdown("**🔍 Suggestions :**")
-        for suggestion in suggestions[:5]:
-            if st.button(suggestion, key=f"addr_{suggestion}", use_container_width=True):
-                adresse = suggestion
-                st.session_state.adresse_selected = suggestion
-    
-    # Si une adresse a été sélectionnée
-    if 'adresse_selected' in st.session_state:
-        adresse = st.session_state.adresse_selected
-    
+    adresse = st.text_input('Adresse complète du bien', placeholder='Ex: 3 Rue Émile Bousseau')
     code_postal = st.text_input('Code postal', value='60600')
 
 with col2:
@@ -681,14 +617,13 @@ with col_button[1]:
             fourchette_max = prix_total * 1.06
             prix_m2_final = prix_m2 * facteur_pieces * facteur_etat * facteur_chambres * facteur_gare
             
-           return {
-    'Prix estimé': f"{prix_total:,.0f}€".replace(',', ' '),
-    'Fourchette': f"{fourchette_min:,.0f}€ - {fourchette_max:,.0f}€".replace(',', ' '),
-    'Prix m²': f"{prix_m2_final:,.0f}€".replace(',', ' '),
-    'Quartier': quartier,
-    'Détails': f"Quartier: {quartier} | Base DVF: {prix_m2_base}€/m² | Similaires: {len(similaires_filtres)} bien(s) | État: {etat}"
-}
-
+            return {
+                'Prix estimé': f"{prix_total:,.0f}€".replace(',', ' '),
+                'Fourchette': f"{fourchette_min:,.0f}€ - {fourchette_max:,.0f}€".replace(',', ' '),
+                'Prix m²': f"{prix_m2_final:,.0f}€".replace(',', ' '),
+                'Quartier': quartier,
+                'Détails': f"Quartier: {quartier} | Base DVF: {prix_m2_base}€/m² | Similaires: {len(similaires_filtres)} bien(s) | État: {etat}"
+            }
         
         if adresse and telephone and email:
             mois = '2026-01'
@@ -696,13 +631,15 @@ with col_button[1]:
             
             st.markdown(f"## ✨ Votre estimation - Référence: {mois}")
             
-            col_a, col_b, col_c = st.columns(3, gap='medium')
+            # NOUVEAU LAYOUT: Valeur + Prix/m² en haut, Fourchette en dessous pleine largeur
+            col_a, col_b = st.columns(2, gap='medium')
             with col_a:
                 st.markdown(f'<div class="metric-card"><h3>Valeur estimée</h3><h2>{result["Prix estimé"]}</h2></div>', unsafe_allow_html=True)
             with col_b:
-                st.markdown(f'<div class="metric-card"><h3>Fourchette</h3><h2>{result["Fourchette"]}</h2></div>', unsafe_allow_html=True)
-            with col_c:
                 st.markdown(f'<div class="metric-card"><h3>Prix/m²</h3><h2>{result["Prix m²"]}</h2></div>', unsafe_allow_html=True)
+            
+            # Fourchette pleine largeur en dessous
+            st.markdown(f'<div class="metric-card"><h3>Fourchette</h3><h2>{result["Fourchette"]}</h2></div>', unsafe_allow_html=True)
             
             st.markdown(f'<div class="info-box"><strong>🎯 Détails :</strong> {result["Détails"]}</div>', unsafe_allow_html=True)
             st.balloons()

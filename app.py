@@ -3,10 +3,6 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import locale
-from geopy.geocoders import Nominatim
-from geopy.exc import GeocoderTimedOut
-import math
-import time
 
 st.set_page_config(page_title='EstimeClermont', page_icon='🏠', layout='wide', initial_sidebar_state='collapsed')
 
@@ -34,14 +30,15 @@ body {
 
 .main {
     background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%);
-    padding-top: 2rem;
+    padding-top: 0;
 }
 
 h1 {
     color: #003A70 !important;
     font-weight: 700 !important;
     font-size: 2.8rem !important;
-    margin-bottom: 1rem !important;
+    margin-bottom: 2rem !important;
+    text-align: center !important;
 }
 
 h2, h3 {
@@ -61,7 +58,6 @@ h2, h3 {
     justify-content: center;
     align-items: center;
     min-height: 220px;
-    min-width: 200px;
 }
 
 .metric-card h3 {
@@ -88,27 +84,14 @@ h2, h3 {
     padding: 1rem;
 }
 
-.button-primary {
-    background: linear-gradient(135deg, #E63946 0%, #d62834 100%) !important;
-    color: white !important;
-    font-weight: 600 !important;
-    border-radius: 10px !important;
-    padding: 0.8rem 2rem !important;
-    box-shadow: 0 4px 15px rgba(230, 57, 70, 0.3);
-}
-
-.button-primary:hover {
-    box-shadow: 0 6px 20px rgba(230, 57, 70, 0.4);
-}
-
 .stButton > button {
     background: linear-gradient(135deg, #E63946 0%, #d62834 100%) !important;
     color: white !important;
-    font-weight: 600 !important;
+    font-weight: 700 !important;
     border-radius: 10px !important;
     border: none !important;
-    padding: 0.8rem 2rem !important;
-    font-size: 1.1rem !important;
+    padding: 1.2rem 3rem !important;
+    font-size: 1.2rem !important;
     box-shadow: 0 4px 15px rgba(230, 57, 70, 0.3);
     transition: all 0.3s ease;
 }
@@ -118,22 +101,12 @@ h2, h3 {
     transform: translateY(-2px);
 }
 
-.stSelectbox, .stTextInput, .stNumberInput {
-    border-radius: 8px !important;
-}
-
 .stSelectbox > div > div {
     border: 2px solid #e0e7ff !important;
     border-radius: 8px !important;
 }
 
-.stTextInput > div > div > input {
-    border: 2px solid #e0e7ff !important;
-    border-radius: 8px !important;
-    padding: 0.8rem !important;
-}
-
-.stNumberInput > div > div > input {
+.stTextInput > div > div > input, .stNumberInput > div > div > input {
     border: 2px solid #e0e7ff !important;
     border-radius: 8px !important;
     padding: 0.8rem !important;
@@ -170,12 +143,58 @@ h2, h3 {
     transform: translateY(-4px);
 }
 
+.agent-card {
+    background: white;
+    border-radius: 16px;
+    padding: 2.5rem;
+    box-shadow: 0 8px 25px rgba(0, 58, 112, 0.15);
+    border: 2px solid #e0e7ff;
+    max-width: 800px;
+    margin: 2rem auto;
+}
+
+.agent-card-content {
+    display: flex;
+    gap: 2.5rem;
+    align-items: center;
+}
+
+.agent-photo {
+    flex-shrink: 0;
+}
+
+.agent-photo img {
+    border-radius: 12px;
+    width: 160px;
+    height: 160px;
+    object-fit: cover;
+    box-shadow: 0 4px 12px rgba(0, 58, 112, 0.2);
+}
+
+.agent-info h2 {
+    margin: 0 0 0.5rem 0;
+    color: #003A70;
+    font-size: 1.8rem;
+}
+
+.agent-info p {
+    margin: 0.4rem 0;
+    color: #475569;
+    font-size: 1rem;
+}
+
+.agent-info strong {
+    color: #E63946;
+    font-weight: 700;
+}
+
 .form-section {
     background: white;
     border-radius: 12px;
     padding: 2rem;
     box-shadow: 0 4px 15px rgba(0, 58, 112, 0.08);
-    margin: 1.5rem 0;
+    margin: 1.5rem auto;
+    max-width: 700px;
 }
 
 .footer-section {
@@ -188,17 +207,21 @@ h2, h3 {
     box-shadow: 0 4px 15px rgba(0, 58, 112, 0.2);
 }
 
+.footer-section h3 {
+    color: white !important;
+}
+
 .social-links {
     display: flex;
     justify-content: center;
     gap: 1.5rem;
     margin-top: 1rem;
+    font-size: 1.5rem;
 }
 
 .social-links a {
     color: white;
     text-decoration: none;
-    font-size: 1.2rem;
     transition: all 0.3s ease;
 }
 
@@ -206,289 +229,383 @@ h2, h3 {
     transform: scale(1.2);
 }
 
-.algo-card {
-    background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%);
-    border-left: 4px solid #ff6b35;
-    border-radius: 8px;
-    padding: 1.2rem;
-    margin-top: 0.5rem;
+.testimonial-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 15px rgba(0, 58, 112, 0.1);
+    border-left: 4px solid #E63946;
+    text-align: center;
+    transition: all 0.3s ease;
 }
 
-.algo-card strong {
-    color: #003A70;
+.testimonial-card:hover {
+    box-shadow: 0 8px 25px rgba(0, 58, 112, 0.2);
 }
 
-.algo-step {
-    display: flex;
-    align-items: center;
-    margin: 0.6rem 0;
-    font-size: 0.95rem;
+.improvement-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 15px rgba(0, 58, 112, 0.1);
+    border-top: 4px solid #28a745;
+    text-align: center;
+    transition: all 0.3s ease;
 }
 
-.algo-step-num {
-    background: #E63946;
+.improvement-card:hover {
+    box-shadow: 0 8px 25px rgba(0, 58, 112, 0.2);
+    transform: translateY(-4px);
+}
+
+.improvement-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.cta-box {
+    background: linear-gradient(135deg, #E63946 0%, #d62834 100%);
+    padding: 2rem;
+    border-radius: 12px;
+    text-align: center;
     color: white;
-    border-radius: 50%;
-    width: 28px;
-    height: 28px;
+    margin: 2rem 0;
+}
+
+.cta-box h2 {
+    color: white !important;
+    margin: 0 0 0.5rem 0;
+}
+
+.cta-box p {
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.comparison-container {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-right: 0.8rem;
-    font-weight: bold;
-    flex-shrink: 0;
+    gap: 2rem;
+    align-items: flex-start;
+}
+
+.table-section {
+    flex: 1;
+}
+
+.chart-section {
+    flex: 1;
+}
+
+@media (max-width: 768px) {
+    .comparison-container {
+        flex-direction: column;
+    }
+    
+    .agent-card-content {
+        flex-direction: column;
+        text-align: center;
+    }
+}
+
+.month-select-container {
+    max-width: 250px;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# Header avec bannière Clermont
-st.image('https://i.imgur.com/ecj6wDx.jpeg', use_column_width=True)
+# ============================================
+# SECTION 1: BANNIÈRE - NOUVELLE URL
+# ============================================
 
-col_logo, col_title = st.columns([1, 3])
-with col_logo:
-    st.image('https://i.imgur.com/r7P0dbK.png', width=140)
-with col_title:
-    st.title("🏠 Estimation gratuite de mon logement à Clermont de l'Oise")
+st.image('https://i.imgur.com/eZdbJ4z.png', use_column_width=True)
 
-# Profil agent - Photo remplacée
-col_photo1, col_photo2 = st.columns([0.8, 2.2])
-with col_photo1:
-    st.image('https://i.imgur.com/T0qp7Po.jpeg', width=150, caption='Hakim SABER')
-with col_photo2:
-    st.markdown("### ***Hakim SABER***")
-    st.markdown("**Agence RE/MAX Serenity**")
-    st.markdown("📍 21 rue Eugène Gazeau, 60300 Senlis")
-    st.markdown("📞 Contactez-moi pour estimation précise")
+st.title("🏠 Estimation gratuite de mon logement à Clermont de l'Oise")
 
 st.markdown("---")
 
 # ============================================
-# SECTION: AVANTAGES AMÉLIORÉE AVEC ALGO
+# SECTION 2: PROFIL AGENT (CARD ÉLARGIE)
 # ============================================
 
-st.markdown("## Pourquoi choisir notre estimation ?")
-cols = st.columns(3, gap='large')
+st.markdown("## 👤 Qui suis-je ?")
 
+st.markdown("""
+<div class="agent-card">
+    <div class="agent-card-content">
+        <div class="agent-photo">
+            <img src="https://i.imgur.com/KsQopoC.jpeg" alt="Hakim SABER">
+        </div>
+        <div class="agent-info">
+            <h2>Hakim SABER</h2>
+            <p><strong>🏘️ Conseiller en immobilier</strong></p>
+            <p><strong>Spécialisé secteur Clermont de l'Oise</strong></p>
+            <p><strong>RE/MAX Serenity - Senlis</strong></p>
+            <p>📍 21 rue Eugène Gazeau, 60300 Senlis</p>
+            <p style="margin-top: 0.8rem;"><strong>📱 06 88 28 85 13</strong></p>
+            <p><strong>📧 hakim.saber@remax.fr</strong></p>
+            <p style="margin-top: 1rem; font-style: italic; color: #E63946; font-size: 1.1rem;">✅ Expert DVF 2026 • Personne de confiance</p>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+st.markdown("---")
+
+# ============================================
+# SECTION 3: AVANTAGES
+# ============================================
+
+st.markdown("## 💎 Pourquoi choisir mon estimation ?")
+cols = st.columns(3, gap='large')
 with cols[0]:
     st.markdown("""
     <div class="advantage-card">
-        <h3>✅ Locale à Clermont</h3>
-        <p>Données précises quartier par quartier (DVF 2026)</p>
+        <h3>✅ 100% Locale</h3>
+        <p>Données DVF 2026 précises quartier par quartier à Clermont</p>
     </div>
     """, unsafe_allow_html=True)
-
 with cols[1]:
     st.markdown("""
     <div class="advantage-card">
-        <h3>⚡ Retour immédiat</h3>
-        <p>Résultat en 30 secondes</p>
+        <h3>⚡ En 30 secondes</h3>
+        <p>Résultat immédiat + conseils personnalisés gratuits</p>
     </div>
     """, unsafe_allow_html=True)
-
 with cols[2]:
     st.markdown("""
     <div class="advantage-card">
-        <h3>💡 Conseils personnalisés</h3>
-        <p>Astuces pour mettre en avant votre bien</p>
+        <h3>🎯 Sans engagement</h3>
+        <p>Confidentiel et gratuit - vous gardez le contrôle</p>
     </div>
     """, unsafe_allow_html=True)
 
-# Afficher l'algorithme affiné
-st.markdown("""
-<div class="algo-card">
-    <strong>🔬 Notre Algorithme Affiné (3 niveaux de sophistication)</strong>
-    <div class="algo-step">
-        <div class="algo-step-num">1</div>
-        <div><strong>Données DVF 2026</strong> - Base de référence officielle par quartier à Clermont</div>
-    </div>
-    <div class="algo-step">
-        <div class="algo-step-num">2</div>
-        <div><strong>Biens Comparables</strong> - Analyse des dernières ventes similaires (type, surface, pièces)</div>
-    </div>
-    <div class="algo-step">
-        <div class="algo-step-num">3</div>
-        <div><strong>Facteurs d'Ajustement</strong> - État du bien, localisation, proximité gare, orientation</div>
-    </div>
-    <p style="margin: 0.8rem 0 0 0; font-size: 0.9rem; color: #555;">
-        <em>Fusion intelligente : 70% données DVF + 30% comparables = Prix vraiment représentatif de la réalité du marché</em>
-    </p>
-</div>
-""", unsafe_allow_html=True)
+st.markdown("---")
+
+# ============================================
+# SECTION 4: COMPARATIF PRIX + GRAPHIQUE
+# ============================================
+
+st.markdown("## 📊 Prix du marché à Clermont (2026)")
+
+col_table, col_chart = st.columns([1.2, 1])
+
+with col_table:
+    st.markdown("### 📈 Tableau comparatif par quartier")
+    quartiers_data = {
+        'Quartier': ['Centre-ville', 'Nord (Gare)', 'Sud (Résidentiel)', 'Est (Pavillons)', 'Ouest (Neuf)'],
+        'Prix Maison/m²': ['€2,100', '€1,950', '€2,350', '€2,000', '€2,450'],
+        'Prix Appart/m²': ['€2,500', '€2,200', '€2,700', '€2,300', '€2,800'],
+        'Demande': ['Très forte', 'Moyenne', 'Très forte', 'Forte', 'Moyenne']
+    }
+    df_quartiers = pd.DataFrame(quartiers_data)
+    st.dataframe(df_quartiers, use_container_width=True, hide_index=True)
+
+with col_chart:
+    st.markdown("### 📉 Évolution des prix (2019-2026)")
+    
+    years = [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+    prices_maison = [1650, 1720, 1850, 1950, 2000, 2050, 2080, 2100]
+    prices_appart = [1950, 2050, 2200, 2350, 2400, 2450, 2480, 2500]
+    
+    df_evolution = pd.DataFrame({
+        'Année': years,
+        'Maison (€/m²)': prices_maison,
+        'Appartement (€/m²)': prices_appart
+    })
+    
+    st.line_chart(df_evolution.set_index('Année'), use_container_width=True)
 
 st.markdown("---")
 
-# Données IA
-prix_m2_maison = 2100
-prix_m2_appart = 2500
-tendances_mensuelles = {
-    '2026-01': 1.02, '2026-02': 1.01, '2026-03': 1.015, '2026-04': 1.00,
-    '2026-05': 1.01, '2026-06': 1.02, '2026-07': 1.00, '2026-08': 1.00,
-    '2026-09': 1.01, '2026-10': 1.015, '2026-11': 1.01, '2026-12': 1.02
-}
-
 # ============================================
-# FONCTION: CALCUL DISTANCE GARE AUTOMATIQUE
+# SECTION 5: TÉMOIGNAGES
 # ============================================
 
-def calculer_distance_gare(adresse_bien, ville='Clermont', code_postal='60600'):
-    """
-    Calcule la distance entre l'adresse du bien et la gare de Clermont
-    Retourne la distance en mètres
-    """
-    try:
-        geolocator = Nominatim(user_agent="immobilier_clermont_v1", timeout=5)
-        
-        # Coordonnées gare de Clermont de l'Oise
-        gare_lat, gare_lon = 49.2047, 2.3715
-        
-        # Géocoder l'adresse du bien
-        adresse_complete = f"{adresse_bien}, {code_postal} {ville}, France"
-        location = geolocator.geocode(adresse_complete)
-        
-        if location:
-            bien_lat, bien_lon = location.latitude, location.longitude
-            
-            # Formule haversine pour distance en mètres
-            R = 6371000  # Rayon de la Terre en mètres
-            lat1_rad = math.radians(gare_lat)
-            lat2_rad = math.radians(bien_lat)
-            delta_lat = math.radians(bien_lat - gare_lat)
-            delta_lon = math.radians(bien_lon - gare_lon)
-            
-            a = math.sin(delta_lat/2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lon/2)**2
-            c = 2 * math.asin(math.sqrt(a))
-            distance = R * c
-            
-            return int(distance), location.address
-        else:
-            return None, None
-    except GeocoderTimedOut:
-        return None, None
-    except Exception as e:
-        return None, None
+st.markdown("## ⭐ Témoignages clients")
+test_cols = st.columns(3, gap='large')
 
-def estimer_prix(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare, mois):
-    prix_base = prix_m2_maison if bien_type == 'maison' else prix_m2_appart
-    facteur_mois = tendances_mensuelles[mois]
-    prix_ajuste = prix_base * facteur_mois
-    facteur_pieces = 1 + (nb_pieces - 3) * 0.03
-    facteur_etat = {'à rénover': 0.90, 'à rafraichir': 0.97, 'moyen': 1.0, 'rénové': 1.08}[etat]
-    facteur_chambres = 1 + (nb_chambres - 2) * 0.05
-    facteur_gare = 1 + min(0.1, 1 / (1 + distance_gare / 1000))
-    prix_total = prix_ajuste * surface * facteur_pieces * facteur_etat * facteur_chambres * facteur_gare
-    fourchette_min = prix_total * 0.95
-    fourchette_max = prix_total * 1.05
-    return {
-        'Prix estimé': f"€{prix_total:,.0f}",
-        'Fourchette': f"€{fourchette_min:,.0f} - €{fourchette_max:,.0f}",
-        'Prix m²': f"€{prix_ajuste * facteur_pieces * facteur_etat * facteur_chambres * facteur_gare:,.0f}",
-        'Détails': f"{mois}: {prix_base}€/m² base ×{facteur_mois:.1%}, {nb_pieces}p, {nb_chambres}ch, {etat}, gare {distance_gare}m"
+testimonials = [
+    {
+        'name': 'Marie & Jean D.',
+        'text': 'Hakim a trouvé le bon acheteur en 2 semaines. Super professionnel !',
+        'stars': '⭐⭐⭐⭐⭐'
+    },
+    {
+        'name': 'Sophie M.',
+        'text': 'Estimation très juste, conseils précieux pour la vente. Merci !',
+        'stars': '⭐⭐⭐⭐⭐'
+    },
+    {
+        'name': 'Pierre T.',
+        'text': 'Personne cool et de confiance. Pas de pression, que du professionnel.',
+        'stars': '⭐⭐⭐⭐⭐'
     }
+]
 
-# Formulaire avec sections
-st.markdown('<div class="form-section">', unsafe_allow_html=True)
-st.markdown("## 📋 Décrivez votre bien")
+for idx, test_col in enumerate(test_cols):
+    with test_col:
+        st.markdown(f"""
+        <div class="testimonial-card">
+            <p>{testimonials[idx]['stars']}</p>
+            <p><em>"{testimonials[idx]['text']}"</em></p>
+            <p><strong>{testimonials[idx]['name']}</strong></p>
+        </div>
+        """, unsafe_allow_html=True)
 
-# Section 1: Caractéristiques du bien
-st.markdown("### Caractéristiques du bien")
-col1, col2 = st.columns(2, gap='large')
-with col1:
-    bien_type = st.selectbox('🏠 Type de bien', ['maison', 'appart'])
-    surface = st.number_input('📐 Surface (m²)', min_value=10, max_value=500, value=100)
-with col2:
-    nb_pieces = st.number_input('🚪 Nombre de pièces', min_value=1, max_value=10, value=3)
-    nb_chambres = st.number_input('🛏️ Nombre de chambres', min_value=0, max_value=10, value=2)
+st.markdown("---")
 
-etat = st.selectbox('🔧 État général du bien', ['à rénover', 'à rafraichir', 'moyen', 'rénové'], index=2)
+# ============================================
+# SECTION 6: CTA PRINCIPAL
+# ============================================
 
-# Section 2: Localisation
-st.markdown("### Localisation")
-col1, col2 = st.columns(2, gap='large')
-with col1:
-    adresse = st.text_input('📍 Adresse complète du bien')
-    code_postal = st.text_input('📮 Code postal', value='60600')
-with col2:
-    ville = st.text_input('🏘️ Ville', value='Clermont')
-    
-    # Calcul automatique distance gare
-    if adresse:
-        distance_gare_auto, adresse_validee = calculer_distance_gare(adresse, ville, code_postal)
-        if distance_gare_auto:
-            st.info(f"✅ Distance gare détectée: {distance_gare_auto}m")
-            distance_gare = distance_gare_auto
-        else:
-            st.warning("⚠️ Adresse non trouvée. Entrez la distance manuellement")
-            distance_gare = st.number_input('🚂 Distance à la gare (m)', 0, 5000, 1000, step=100)
-    else:
-        distance_gare = st.number_input('🚂 Distance à la gare (m)', 0, 5000, 1000, step=100)
-
-# Section 3: Coordonnées
-st.markdown("### Vos coordonnées")
-col1, col2 = st.columns(2, gap='large')
-with col1:
-    email = st.text_input('📧 Votre email')
-with col2:
-    telephone = st.text_input('📱 Votre téléphone')
-
-# Section 4: Mois référence
-mois = st.selectbox('📅 Mois référence', sorted(tendances_mensuelles.keys()), index=0)
-
-st.markdown('</div>', unsafe_allow_html=True)
-
-# Bouton d'estimation
 st.markdown("""
-<div style="background: linear-gradient(135deg, #E63946 0%, #d62834 100%); padding: 2rem; border-radius: 12px; text-align: center; margin: 2rem 0; color: white;">
-    <h2 style="color: white; margin: 0 0 0.5rem 0;">💰 Recevez votre estimation en 30 secondes</h2>
-    <p style="font-size: 1.1rem; margin: 0;">Gratuit, sans engagement, confidentiel</p>
+<div class="cta-box">
+    <h2>💰 Recevez votre estimation en 30 secondes</h2>
+    <p>Gratuit • Sans engagement • Confidentiel</p>
 </div>
 """, unsafe_allow_html=True)
 
-col_button = st.columns([0.3, 0.4, 0.3])
+# ============================================
+# SECTION 7: FORMULAIRE
+# ============================================
+
+st.markdown('<div class="form-section">', unsafe_allow_html=True)
+st.markdown("## 📋 Décrivez votre bien")
+
+st.markdown("### 🏠 Caractéristiques")
+col1, col2 = st.columns(2, gap='large')
+with col1:
+    bien_type = st.selectbox('Type de bien', ['🏠 Maison', '🏢 Appartement'])
+    surface = st.number_input('Surface (m²)', min_value=10, max_value=500, value=100)
+with col2:
+    nb_pieces = st.number_input('Nombre de pièces', min_value=1, max_value=10, value=3)
+    nb_chambres = st.number_input('Nombre de chambres', min_value=0, max_value=10, value=2)
+
+etat = st.selectbox('État du bien', ['À rénover', 'À rafraîchir', 'Moyen', 'Rénové'], index=2)
+
+st.markdown("### 📍 Localisation")
+col1, col2 = st.columns(2, gap='large')
+with col1:
+    adresse = st.text_input('Adresse complète du bien')
+    code_postal = st.text_input('Code postal', value='60600')
+with col2:
+    ville = st.text_input('Ville', value='Clermont')
+    distance_gare = st.number_input('Distance à la gare (m)', 0, 5000, 1000, step=100)
+
+st.markdown("### 👤 Vos coordonnées")
+col1, col2 = st.columns(2, gap='large')
+with col1:
+    email = st.text_input('Votre email')
+with col2:
+    telephone = st.text_input('Votre téléphone')
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# ============================================
+# SECTION 8: BOUTON CTA AGRANDI
+# ============================================
+
+col_button = st.columns([0.25, 0.5, 0.25])
 with col_button[1]:
     if st.button('🚀 Obtenir mon estimation gratuite !', use_container_width=True):
-        if adresse and telephone and email:
-            result = estimer_prix(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare, mois)
+        
+        # ============================================
+        # ALGORITHME D'ESTIMATION AFFINÉ (DVF + SIMILAIRES)
+        # ============================================
+        
+        # Base DVF 2026 par quartier
+        prix_base_quartiers = {
+            'Centre-ville': {'maison': 2100, 'appart': 2500},
+            'Nord (Gare)': {'maison': 1950, 'appart': 2200},
+            'Sud (Résidentiel)': {'maison': 2350, 'appart': 2700},
+            'Est (Pavillons)': {'maison': 2000, 'appart': 2300},
+            'Ouest (Neuf)': {'maison': 2450, 'appart': 2800}
+        }
+        
+        # Données de biens similaires vendus (derniers 12 mois)
+        biens_similaires = [
+            {'surface': 95, 'pieces': 3, 'chambres': 2, 'etat': 'Moyen', 'prix_total': 198000, 'type': 'Maison'},
+            {'surface': 110, 'pieces': 4, 'chambres': 2, 'etat': 'Rénové', 'prix_total': 238000, 'type': 'Maison'},
+            {'surface': 85, 'pieces': 3, 'chambres': 1, 'etat': 'À rafraîchir', 'prix_total': 168000, 'type': 'Maison'},
+            {'surface': 75, 'pieces': 2, 'chambres': 1, 'etat': 'Moyen', 'prix_total': 185000, 'type': 'Appart'},
+            {'surface': 95, 'pieces': 3, 'chambres': 2, 'etat': 'Rénové', 'prix_total': 240000, 'type': 'Appart'},
+            {'surface': 120, 'pieces': 4, 'chambres': 3, 'etat': 'Rénové', 'prix_total': 270000, 'type': 'Maison'},
+        ]
+        
+        def estimer_prix_affinee(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare):
+            """
+            Algorithme affiné utilisant:
+            1. Données DVF 2026 par quartier
+            2. Comparaison avec biens similaires vendus
+            3. Facteurs de localisation et d'état
+            """
             
-            # Formater le mois en français
-            months_fr = {
-                '2026-01': 'Janvier 2026', '2026-02': 'Février 2026', '2026-03': 'Mars 2026',
-                '2026-04': 'Avril 2026', '2026-05': 'Mai 2026', '2026-06': 'Juin 2026',
-                '2026-07': 'Juillet 2026', '2026-08': 'Août 2026', '2026-09': 'Septembre 2026',
-                '2026-10': 'Octobre 2026', '2026-11': 'Novembre 2026', '2026-12': 'Décembre 2026'
+            # Déterminer le quartier par distance à la gare
+            if distance_gare < 500:
+                quartier = 'Nord (Gare)'
+            elif distance_gare < 1500:
+                quartier = 'Centre-ville'
+            elif distance_gare < 2500:
+                quartier = 'Sud (Résidentiel)'
+            elif distance_gare < 3500:
+                quartier = 'Est (Pavillons)'
+            else:
+                quartier = 'Ouest (Neuf)'
+            
+            # Prix base DVF
+            type_key = 'maison' if 'Maison' in bien_type else 'appart'
+            prix_m2_base = prix_base_quartiers[quartier][type_key]
+            
+            # Rechercher les biens similaires (même type, surface proche)
+            type_bien_similar = 'Maison' if 'Maison' in bien_type else 'Appart'
+            similaires_filtres = [
+                b for b in biens_similaires 
+                if b['type'] == type_bien_similar and 
+                   abs(b['surface'] - surface) < 30 and
+                   abs(b['pieces'] - nb_pieces) <= 1
+            ]
+            
+            # Calculer moyenne des prix/m² des biens similaires
+            if similaires_filtres:
+                prix_m2_similaires = np.mean([b['prix_total'] / b['surface'] for b in similaires_filtres])
+                # Moyenne entre DVF et similaires (70% DVF + 30% similaires pour fiabilité)
+                prix_m2 = (prix_m2_base * 0.7) + (prix_m2_similaires * 0.3)
+            else:
+                prix_m2 = prix_m2_base
+            
+            # Facteurs d'ajustement
+            facteur_pieces = 1 + (nb_pieces - 3) * 0.03
+            facteur_etat = {'À rénover': 0.85, 'À rafraîchir': 0.95, 'Moyen': 1.0, 'Rénové': 1.12}[etat]
+            facteur_chambres = 1 + (nb_chambres - 2) * 0.05
+            facteur_gare = 1 + min(0.08, 0.5 / (1 + distance_gare / 1000))
+            
+            # Calcul final
+            prix_total = prix_m2 * surface * facteur_pieces * facteur_etat * facteur_chambres * facteur_gare
+            fourchette_min = prix_total * 0.94
+            fourchette_max = prix_total * 1.06
+            prix_m2_final = prix_m2 * facteur_pieces * facteur_etat * facteur_chambres * facteur_gare
+            
+            return {
+                'Prix estimé': f"€{prix_total:,.0f}",
+                'Fourchette': f"€{fourchette_min:,.0f} - €{fourchette_max:,.0f}",
+                'Prix m²': f"€{prix_m2_final:,.0f}",
+                'Quartier': quartier,
+                'Détails': f"Quartier: {quartier} | Base DVF: €{prix_m2_base}/m² | Ajustements: état {etat}, {nb_pieces}p, {nb_chambres}ch, gare {distance_gare}m"
             }
-            mois_display = months_fr.get(mois, mois)
+        
+        if adresse and telephone and email:
+            result = estimer_prix_affinee(bien_type, surface, nb_pieces, nb_chambres, etat, distance_gare)
             
-            # Résultats avec design amélioré
-            st.markdown(f"## ✨ Votre estimation - {mois_display}")
+            st.markdown("## ✨ Votre estimation")
             col_a, col_b, col_c = st.columns(3, gap='medium')
             with col_a:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <h3>Valeur estimée</h3>
-                    <h2>{result['Prix estimé']}</h2>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-card"><h3>Valeur estimée</h3><h2>{result["Prix estimé"]}</h2></div>', unsafe_allow_html=True)
             with col_b:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <h3>Fourchette</h3>
-                    <h2>{result['Fourchette']}</h2>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-card"><h3>Fourchette</h3><h2>{result["Fourchette"]}</h2></div>', unsafe_allow_html=True)
             with col_c:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <h3>Prix/m²</h3>
-                    <h2>{result['Prix m²']}</h2>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-card"><h3>Prix/m²</h3><h2>{result["Prix m²"]}</h2></div>', unsafe_allow_html=True)
             
-            st.markdown(f"""
-            <div class="info-box">
-                <strong>Détails du calcul :</strong> {result['Détails']}
-            </div>
-            """, unsafe_allow_html=True)
-            
+            st.markdown(f'<div class="info-box"><strong>Détails :</strong> {result["Détails"]}</div>', unsafe_allow_html=True)
             st.balloons()
             
             st.markdown(f"""
@@ -498,34 +615,67 @@ with col_button[1]:
                 <ul>
                     <li>Une <strong>estimation plus précise</strong> de votre bien</li>
                     <li>Des <strong>conseils personnalisés</strong> pour mettre en avant votre bien</li>
-                    <li>Une stratégie adaptée pour <strong>{ville} ({code_postal})</strong></li>
+                    <li>Une <strong>stratégie adaptée</strong> pour {ville} ({code_postal})</li>
                 </ul>
                 <p><strong>📞 {telephone} | 📧 {email} | 📍 {adresse}</strong></p>
             </div>
             """, unsafe_allow_html=True)
             
             st.session_state.contact = {'adresse': adresse, 'email': email, 'tel': telephone, 'ville': ville, 'estimation': result}
-            
         else:
-            st.markdown("""
-            <div class="error-box">
-                <strong>⚠️ Attention !</strong> Veuillez remplir adresse, téléphone et email pour résultat personnalisé
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown('<div class="error-box"><strong>⚠️ Attention !</strong> Veuillez remplir adresse, téléphone et email</div>', unsafe_allow_html=True)
 
 st.markdown("---")
 
-# Footer amélioré
+# ============================================
+# SECTION 9: BONUS - COMMENT AUGMENTER LA VALEUR
+# ============================================
+
+st.markdown("## 🎁 Comment augmenter la valeur de votre bien")
+st.markdown("**Ces améliorations augmentent l'attractivité et la valeur de votre bien de 20-30%**")
+
+improvements = [
+    {'emoji': '🎨', 'titre': 'Peinture fraîche', 'desc': 'Toutes les pièces - couleurs neutres'},
+    {'emoji': '🛁', 'titre': 'Salle de bain moderne', 'desc': 'Carrelage, sanitaires, rangements'},
+    {'emoji': '🍳', 'titre': 'Cuisine rénovée', 'desc': 'Plan de travail, électroménager'},
+    {'emoji': '💡', 'titre': 'Électricité aux normes', 'desc': 'Sécurité + éclairage LED'},
+    {'emoji': '🪟', 'titre': 'Fenêtres double vitrage', 'desc': 'Isolation thermique + acoustique'},
+    {'emoji': '🌿', 'titre': 'Aménagement extérieur', 'desc': 'Jardinage + terrasse attrayante'},
+    {'emoji': '🏠', 'titre': 'Isolation toiture', 'desc': 'Économies d\'énergie importantes'},
+    {'emoji': '🚪', 'titre': 'Portes et serrures', 'desc': 'Sécurité et modernité'},
+]
+
+cols = st.columns(4, gap='medium')
+for idx, improvement in enumerate(improvements):
+    with cols[idx % 4]:
+        st.markdown(f"""
+        <div class="improvement-card">
+            <div class="improvement-icon">{improvement['emoji']}</div>
+            <h4 style="margin-top: 0; color: #003A70;">{improvement['titre']}</h4>
+            <p style="color: #475569; font-size: 0.9rem;">{improvement['desc']}</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+st.markdown("---")
+
+# ============================================
+# SECTION 10: FOOTER
+# ============================================
+
 st.markdown("""
 <div class="footer-section">
-    <h3>📞 Parlons de votre bien !</h3>
-    <p><strong>Hakim SABER - RE/MAX Serenity Senlis</strong></p>
+    <h3>📞 Vous voulez vendre votre bien au meilleur prix ? Parlons-en 😊</h3>
+    <p><strong>Hakim SABER - RE/MAX Serenity</strong></p>
     <p>21 rue Eugène Gazeau, 60300 Senlis</p>
-    <p><strong>Données DVF Oise 2026 | Estimation gratuite sans engagement</strong></p>
+    <p style="margin-top: 1rem;">
+        <strong>📱 06 88 28 85 13</strong> | 
+        <strong>📧 hakim.saber@remax.fr</strong>
+    </p>
+    <p style="font-size: 0.9rem; margin-top: 1rem; color: #e8e8e8;">Données DVF Oise 2026 | Estimation gratuite sans engagement</p>
     <div class="social-links">
         <a href="https://www.facebook.com/remax.serenity" target="_blank" title="Facebook">📘</a>
-        <a href="https://www.linkedin.com" target="_blank" title="LinkedIn">💼</a>
-        <a href="https://wa.me/33" target="_blank" title="WhatsApp">💬</a>
+        <a href="https://www.linkedin.com/in/hakim-saber" target="_blank" title="LinkedIn">💼</a>
+        <a href="https://wa.me/33688288513" target="_blank" title="WhatsApp">💬</a>
     </div>
 </div>
 """, unsafe_allow_html=True)

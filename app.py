@@ -52,34 +52,37 @@ h2, h3 {
     background: linear-gradient(135deg, #E63946 0%, #d62834 100%);
     color: white !important;
     border-radius: 12px;
-    padding: 1.5rem 1rem;
+    padding: 1.2rem 0.8rem;
     box-shadow: 0 4px 15px rgba(230, 57, 70, 0.2);
     text-align: center;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    min-height: 200px;
+    min-height: 180px;
     word-break: break-word;
     overflow-wrap: break-word;
 }
 
 .metric-card h3 {
     color: white !important;
-    font-size: 0.85rem !important;
-    margin-bottom: 0.8rem !important;
+    font-size: 0.8rem !important;
+    margin-bottom: 0.6rem !important;
     font-weight: 500 !important;
+    line-height: 1.2;
 }
 
 .metric-card h2 {
     color: #FFFFFF !important;
-    font-size: 1.8rem !important;
+    font-size: 1.5rem !important;
     margin: 0 !important;
     font-weight: 700 !important;
-    line-height: 1.2;
+    line-height: 1.1;
     max-width: 100%;
     word-wrap: break-word;
+    word-break: break-word;
 }
+
 
 
 .info-box {
@@ -678,13 +681,14 @@ with col_button[1]:
             fourchette_max = prix_total * 1.06
             prix_m2_final = prix_m2 * facteur_pieces * facteur_etat * facteur_chambres * facteur_gare
             
-            return {
-                'Prix estimé': f"€{prix_total:,.0f}",
-                'Fourchette': f"€{fourchette_min:,.0f} - €{fourchette_max:,.0f}",
-                'Prix m²': f"€{prix_m2_final:,.0f}",
-                'Quartier': quartier,
-                'Détails': f"Quartier: {quartier} | Base DVF: €{prix_m2_base}/m² | Similaires: {len(similaires_filtres)} bien(s) | État: {etat}"
-            }
+           return {
+    'Prix estimé': f"{prix_total:,.0f}€".replace(',', ' '),
+    'Fourchette': f"{fourchette_min:,.0f}€ - {fourchette_max:,.0f}€".replace(',', ' '),
+    'Prix m²': f"{prix_m2_final:,.0f}€".replace(',', ' '),
+    'Quartier': quartier,
+    'Détails': f"Quartier: {quartier} | Base DVF: {prix_m2_base}€/m² | Similaires: {len(similaires_filtres)} bien(s) | État: {etat}"
+}
+
         
         if adresse and telephone and email:
             mois = '2026-01'

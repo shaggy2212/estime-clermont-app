@@ -542,25 +542,29 @@ with col1:
         try:
             response = requests.get('https://nominatim.openstreetmap.org/search', 
                 params={
-                    'q': f"{adresse_input}, Clermont-de-l'Oise, France",
+                    'q': f"{adresse_input}, 60600 Clermont de l'Oise",
                     'format': 'json',
-                    'limit': 10,
-                    'addressdetails': 1
+                    'limit': 15,
+                    'addressdetails': 1,
+                    'viewbox': '2.3,49.6,2.4,49.7',  # Coordonnées de Clermont
+                    'bounded': 1
                 },
                 headers={'User-Agent': 'EstimeClermont/1.0'},
-                timeout=3)
+                timeout=5)
             
-            if response.status_code == 200:
+            if response.status_code == 200 and response.json():
                 for result in response.json():
                     address = result.get('address', {})
+                    display_name = result.get('display_name', '')
+                    osm_class = result.get('class', '')
+                    osm_type = result.get('osm_type', '')
                     
                     # Vérifier que c'est à Clermont
-                    if 'Clermont' not in result.get('display_name', ''):
+                    if 'Clermont' not in display_name and '60600' not in display_name:
                         continue
                     
                     # Retirer les POI (commerces, amenities, etc)
-                    osm_class = result.get('class', '')
-                    if osm_class in ['amenity', 'shop', 'office', 'leisure', 'tourism']:
+                    if osm_class in ['amenity', 'shop', 'office', 'leisure', 'tourism', 'building']:
                         continue
                     
                     # Construire l'adresse simplifiée
@@ -576,7 +580,7 @@ with col1:
                         
                         if simple_addr not in suggestions:
                             suggestions.append(simple_addr)
-        except:
+        except Exception as e:
             pass
     
     # Afficher les suggestions en boutons cliquables
@@ -596,6 +600,7 @@ with col1:
 with col2:
     ville = st.text_input('Ville', value='Clermont')
     distance_gare = st.number_input('Distance à la gare (m)', 0, 5000, 1000, step=100)
+
 
 st.markdown("### 👤 Vos coordonnées")
 col1, col2 = st.columns(2, gap='large')

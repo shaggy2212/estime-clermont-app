@@ -8,7 +8,6 @@ import locale
 
 st.set_page_config(page_title='EstimeClermont', page_icon='🏠', layout='wide', initial_sidebar_state='collapsed')
 
-
 # Configuration locale française
 try:
     locale.setlocale(locale.LC_TIME, 'fr_FR.UTF-8')

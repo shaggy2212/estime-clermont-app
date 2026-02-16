@@ -8,21 +8,6 @@ import locale
 
 st.set_page_config(page_title='EstimeClermont', page_icon='🏠', layout='wide', initial_sidebar_state='collapsed')
 
-# Forcer light mode + cacher footer Streamlit pour Carrd
-st.markdown("""
-<style>
-    /* Forcer light mode permanent */
-    [data-testid="theme-picker"] { display: none !important; }
-    
-    /* Supprimer footer "Built with Streamlit" */
-    footer { visibility: hidden !important; }
-    
-    /* Supprimer barre Streamlit en haut */
-    [data-testid="stToolbar"] { visibility: hidden !important; }
-</style>
-""", unsafe_allow_html=True)
-
-
 
 # Configuration locale française
 try:

@@ -8,20 +8,20 @@ import locale
 
 st.set_page_config(page_title='EstimeClermont', page_icon='🏠', layout='wide', initial_sidebar_state='collapsed')
 
-# Supprimer "Built with Streamlit" + forcer light mode permanent
-hide_streamlit = """
+# Forcer light mode + cacher footer Streamlit pour Carrd
+st.markdown("""
 <style>
-    /* Supprimer footer Streamlit */
-    footer { visibility: hidden !important; }
-    
     /* Forcer light mode permanent */
     [data-testid="theme-picker"] { display: none !important; }
+    
+    /* Supprimer footer "Built with Streamlit" */
+    footer { visibility: hidden !important; }
     
     /* Supprimer barre Streamlit en haut */
     [data-testid="stToolbar"] { visibility: hidden !important; }
 </style>
-"""
-st.markdown(hide_streamlit, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
+
 
 
 # Configuration locale française

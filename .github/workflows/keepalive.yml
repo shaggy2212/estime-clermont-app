@@ -1,0 +1,27 @@
+name: Keep Streamlit Awake
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # toutes les 30 minutes
+  workflow_dispatch:
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: |
+          npm init -y
+          npm i -D playwright
+          npx playwright install --with-deps chromium
+
+      - name: Run wake script
+        env:
+          STREAMLIT_URL: "https://estime-clermont-app-jq8fmfdn95ggqtukbncztr.streamlit.app/"
+        run: node wake-streamlit.js

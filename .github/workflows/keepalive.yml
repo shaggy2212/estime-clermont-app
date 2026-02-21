@@ -16,9 +16,8 @@ jobs:
           node-version: "20"
           cache: "npm"
 
-      # Cache des navigateurs Playwright
       - name: Cache Playwright browsers
-      - uses: actions/cache@v4
+        uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('wake-streamlit.js') }}

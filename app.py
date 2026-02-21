@@ -20,6 +20,11 @@ ACCENT = "#FF7E79"
 GARE_LON = 2.41767
 GARE_LAT = 49.38531
 
+# Local scope (on limite volontairement à Clermont-de-l'Oise)
+LOCAL_CITY = "Clermont"
+LOCAL_POSTCODE = "60600"
+LOCAL_LABEL = "Clermont-de-l'Oise (60600)"
+
 # Géoplateforme (IGN) - endpoints
 GEOPF_COMPLETION_URL = "https://data.geopf.fr/geocodage/completion/"
 GEOPF_SEARCH_URL = "https://data.geopf.fr/geocodage/search"
@@ -45,8 +50,6 @@ if "nb_pieces" not in st.session_state:
     st.session_state.nb_pieces = 3
 if "nb_chambres" not in st.session_state:
     st.session_state.nb_chambres = 2
-if "code_postal" not in st.session_state:
-    st.session_state.code_postal = "60600"
 if "addr_typed" not in st.session_state:
     st.session_state.addr_typed = ""
 if "addr_choice" not in st.session_state:
@@ -70,6 +73,11 @@ st.markdown(
 h1 {{ color: {PRIMARY} !important; font-weight: 800 !important; text-align:center; margin-bottom: 0.2rem; }}
 h2 {{ color: {PRIMARY} !important; font-weight: 700 !important; }}
 .small-note {{ color:#4b5563; font-size:0.9rem; }}
+
+.badge {{
+  display:inline-block; padding:0.35rem 0.7rem; border-radius:999px;
+  background: rgba(0, 77, 127, 0.10); color:{PRIMARY}; font-weight:700; font-size:0.85rem;
+}}
 
 .card {{
   background: white; border-radius: 14px; padding: 1.1rem;
@@ -114,17 +122,35 @@ def haversine_m(lat1, lon1, lat2, lon2) -> float:
     return float(2 * R * np.arctan2(np.sqrt(a), np.sqrt(1 - a)))
 
 
+def normalize_query_to_clermont(q: str) -> str:
+    """Force le contexte local (Clermont 60600) pour éviter les homonymes."""
+    q = (q or "").strip()
+    if not q:
+        return q
+    if LOCAL_POSTCODE not in q and LOCAL_CITY.lower() not in q.lower():
+        q = f"{q}, {LOCAL_POSTCODE} {LOCAL_CITY}, Oise, France"
+    return q
+
+
 @st.cache_data(ttl=60 * 60)  # 1h
-def geopf_completion(text: str, postcode: str = "60600", max_resp: int = 7) -> List[Dict[str, Any]]:
-    """Suggestions d'adresse via Géoplateforme autocomplétion."""
+def geopf_completion(
+    text: str,
+    postcode: str = LOCAL_POSTCODE,
+    city: str = LOCAL_CITY,
+    max_resp: int = 7,
+) -> List[Dict[str, Any]]:
+    """Suggestions d'adresse via Géoplateforme autocomplétion, limité à Clermont."""
     if not text or len(text.strip()) < 3:
         return []
+
     params = {
         "text": text.strip(),
-        "terr": postcode,            # restriction géographique (selon doc)
+        "terr": postcode,
         "type": "StreetAddress",
         "maximumResponses": max_resp,
+        "city": city,
     }
+
     r = requests.get(GEOPF_COMPLETION_URL, params=params, timeout=8)
     r.raise_for_status()
     data = r.json()
@@ -135,11 +161,16 @@ def geopf_completion(text: str, postcode: str = "60600", max_resp: int = 7) -> L
     for it in results:
         props = it.get("properties", it) if isinstance(it, dict) else {}
         label = props.get("label") or props.get("fulltext") or props.get("name")
-        if label:
-            out.append({"label": label})
+        if not label:
+            continue
 
-    if results and isinstance(results, list) and isinstance(results[0], dict) and results[0].get("label"):
-        out = results  # API already in expected format
+        # Filtre "dur" côté app pour rester sur Clermont (60600)
+        if postcode and postcode not in label:
+            continue
+        if city and city.lower() not in label.lower():
+            continue
+
+        out.append({"label": label})
 
     # Deduplicate
     seen = set()
@@ -242,7 +273,11 @@ def eur(x: float) -> str:
 # ---------------------------
 # Header
 # ---------------------------
-st.markdown("<h1>🏠 Estimation locale à Clermont (60600)</h1>", unsafe_allow_html=True)
+st.markdown("<h1>🏠 Estimation locale</h1>", unsafe_allow_html=True)
+st.markdown(
+    f"<div style='text-align:center; margin-bottom:0.6rem;'><span class='badge'>Zone : {LOCAL_LABEL}</span></div>",
+    unsafe_allow_html=True,
+)
 st.markdown(
     "<div class='card'><b>Objectif :</b> vous donner une <b>fourchette crédible</b> en 30 secondes, "
     "puis affiner avec des ventes comparables et les spécificités de votre bien.</div>",
@@ -297,9 +332,9 @@ if st.session_state.step == 1:
                 step=1,
                 key="nb_chambres",  # int partout
             )
-            st.text_input("Code postal", key="code_postal")
+            st.markdown(f"**Ville :** {LOCAL_LABEL}")
 
-        st.markdown("### 📍 Adresse")
+        st.markdown("### 📍 Adresse (uniquement Clermont 60600)")
         st.text_input(
             "Commencez à taper l’adresse",
             placeholder="Ex : 3 rue Émile Bousseau",
@@ -308,7 +343,7 @@ if st.session_state.step == 1:
 
         suggestions: List[Dict[str, Any]] = []
         try:
-            suggestions = geopf_completion(st.session_state.addr_typed, postcode=st.session_state.code_postal)
+            suggestions = geopf_completion(st.session_state.addr_typed, postcode=LOCAL_POSTCODE, city=LOCAL_CITY)
         except Exception:
             suggestions = []
 
@@ -319,18 +354,17 @@ if st.session_state.step == 1:
                 default_index = labels.index(st.session_state.addr_choice)
 
             st.selectbox(
-                "Suggestions",
+                "Suggestions (Clermont uniquement)",
                 labels,
                 index=default_index,
                 key="addr_choice",
             )
         else:
-            # fallback: addr_choice follows typed address
             st.session_state.addr_choice = (st.session_state.addr_typed or "").strip()
 
         st.markdown(
-            "<p class='small-note'>Astuce : choisissez une suggestion pour améliorer la précision "
-            "(et calculer la distance à la gare automatiquement).</p>",
+            "<p class='small-note'>Pour une estimation plus fiable, l’outil est volontairement limité à "
+            "<b>Clermont-de-l’Oise (60600)</b>.</p>",
             unsafe_allow_html=True,
         )
 
@@ -339,18 +373,24 @@ if st.session_state.step == 1:
         if go_step2:
             addr_choice = (st.session_state.addr_choice or "").strip()
             if not addr_choice or len(addr_choice) < 6:
-                st.error("Ajoute une adresse plus complète (ou choisis une suggestion).")
+                st.error("Ajoute une adresse plus complète (ou choisis une suggestion à Clermont).")
                 st.stop()
 
+            q = normalize_query_to_clermont(addr_choice)
+
             try:
-                geo = geopf_geocode_one(addr_choice)
+                geo = geopf_geocode_one(q)
             except Exception:
                 geo = None
 
             if not geo:
-                st.error(
-                    "Impossible de géocoder l’adresse. Essaie une suggestion différente (ou ajoute le numéro + rue)."
-                )
+                st.error("Impossible de géocoder l’adresse. Choisis une suggestion (Clermont) ou précise numéro + rue.")
+                st.stop()
+
+            # Garde-fou : doit ressembler à Clermont 60600
+            label_low = (geo.get("label") or "").lower()
+            if LOCAL_POSTCODE not in label_low and LOCAL_CITY.lower() not in label_low:
+                st.error("Cette adresse ne semble pas être à Clermont (60600). Choisis une suggestion dans Clermont.")
                 st.stop()
 
             distance_m = haversine_m(geo["lat"], geo["lon"], GARE_LAT, GARE_LON)

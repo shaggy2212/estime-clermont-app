@@ -38,8 +38,17 @@ const { chromium } = require("playwright");
     await page.reload({ waitUntil: "domcontentloaded", timeout: 120000 });
   }
 
-  await page.waitForSelector('[data-testid="stAppViewContainer"]', { timeout: 120000 });
-  await page.waitForSelector("text=Décrivez votre bien", { timeout: 120000 });
+  // Attendre une preuve de vie Streamlit (plusieurs options)
+await Promise.race([
+  page.waitForSelector("text=Décrivez votre bien", { timeout: 120000 }),
+  page.waitForSelector("text=Obtenir mon estimation gratuite", { timeout: 120000 }),
+  page.waitForSelector('[data-testid="stApp"]', { timeout: 120000 }),
+  page.waitForSelector('[data-testid="stAppViewContainer"]', { timeout: 120000 }),
+  page.waitForSelector('[data-testid="stHeader"]', { timeout: 120000 }),
+]);
+
+console.log("App awake (proof detected) ✅");
+
 
   console.log("OK ✅");
 

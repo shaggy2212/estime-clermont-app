@@ -1,7 +1,7 @@
 import streamlit as st
 import numpy as np
 import requests
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 # ---------------------------
 # Config
@@ -15,16 +15,25 @@ st.set_page_config(
 
 PRIMARY = "#004D7F"
 ACCENT = "#FF7E79"
-SOFT = "#EAF2FF"  # light blue background accents
+SOFT = "#EAF2FF"
 
 # Gare Clermont-de-l'Oise (POINT lon lat)
 GARE_LON = 2.41767
 GARE_LAT = 49.38531
 
-# Scope local
-LOCAL_CITY = "Clermont"
-LOCAL_POSTCODE = "60600"
-LOCAL_LABEL = "Clermont-de-l'Oise (60600)"
+# Périmètre (communes autorisées)
+AREAS: Dict[str, Dict[str, str]] = {
+    "Clermont-de-l'Oise": {"city": "Clermont", "postcode": "60600"},
+    "Breuil-le-Vert": {"city": "Breuil-le-Vert", "postcode": "60600"},
+    "Agnetz": {"city": "Agnetz", "postcode": "60600"},
+    "Fitz-James": {"city": "Fitz-James", "postcode": "60600"},
+    "Breuil-le-Sec": {"city": "Breuil-le-Sec", "postcode": "60840"},
+    "Neuilly-sous-Clermont": {"city": "Neuilly-sous-Clermont", "postcode": "60290"},
+    "Bailleval": {"city": "Bailleval", "postcode": "60140"},
+}
+
+AUTO_AREA = "🔎 Détection automatique"
+DEFAULT_AREA = "Clermont-de-l'Oise"
 
 # Géoplateforme (IGN)
 GEOPF_COMPLETION_URL = "https://data.geopf.fr/geocodage/completion/"
@@ -37,14 +46,16 @@ st.session_state.setdefault("step", 1)
 st.session_state.setdefault("geo", None)
 st.session_state.setdefault("res", None)
 
-# Step 1 inputs (keys == widget keys)
+# Step 1 inputs
+st.session_state.setdefault("area_name", AUTO_AREA)  # ✅ auto par défaut
 st.session_state.setdefault("bien_type", "Maison")
 st.session_state.setdefault("surface", 100.0)  # float
 st.session_state.setdefault("etat", "Moyen")
 st.session_state.setdefault("nb_pieces", 3)     # int
 st.session_state.setdefault("nb_chambres", 2)   # int
 st.session_state.setdefault("addr_typed", "")
-st.session_state.setdefault("addr_choice", "")
+st.session_state.setdefault("addr_choice", "")          # label brut (sans préfixe)
+st.session_state.setdefault("addr_choice_display", "")  # label affiché (peut contenir préfixe)
 
 # Contact
 st.session_state.setdefault("prenom", "")
@@ -56,7 +67,7 @@ st.session_state.setdefault("consent", False)
 st.session_state.setdefault("show_explain", False)
 
 # ---------------------------
-# CSS (premium + secondary back button + form submit style)
+# CSS
 # ---------------------------
 st.markdown(
     f"""
@@ -113,7 +124,7 @@ h2 {{
 
 hr {{ border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 1.3rem 0; }}
 
-/* ✅ Primary buttons (cta + submit) */
+/* Primary buttons (cta + submit) */
 .stButton > button,
 .stFormSubmitButton > button {{
     background: linear-gradient(135deg, {ACCENT} 0%, #ff5b66 100%) !important;
@@ -125,14 +136,13 @@ hr {{ border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 1.3rem 0; }}
     font-size: 1.07rem !important;
     box-shadow: 0 10px 26px rgba(255, 126, 121, 0.35) !important;
 }}
-
 .stButton > button:hover,
 .stFormSubmitButton > button:hover {{
     box-shadow: 0 14px 34px rgba(255, 126, 121, 0.48) !important;
     transform: translateY(-1px);
 }}
 
-/* ✅ Secondary button style (Back) via wrapper class */
+/* Secondary button style (Back) via wrapper */
 .secondary-btn .stButton > button {{
     background: rgba(0, 77, 127, 0.08) !important;
     color: {PRIMARY} !important;
@@ -144,11 +154,6 @@ hr {{ border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 1.3rem 0; }}
     background: rgba(0, 77, 127, 0.12) !important;
     box-shadow: none !important;
     transform: none !important;
-}}
-
-/* Improve widget spacing slightly */
-div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stForm"]) {{
-  margin-top: 0.3rem;
 }}
 </style>
 """,
@@ -168,17 +173,29 @@ def haversine_m(lat1, lon1, lat2, lon2) -> float:
     return float(2 * R * np.arctan2(np.sqrt(a), np.sqrt(1 - a)))
 
 
-def normalize_query_to_clermont(q: str) -> str:
+def norm(s: str) -> str:
+    return (s or "").strip().lower().replace("’", "'")
+
+
+def current_area_info() -> Dict[str, str]:
+    if st.session_state.area_name in AREAS:
+        return AREAS[st.session_state.area_name]
+    return AREAS[DEFAULT_AREA]
+
+
+def normalize_query_to_area(q: str, city: str, postcode: str) -> str:
     q = (q or "").strip()
     if not q:
         return q
-    if LOCAL_POSTCODE not in q and LOCAL_CITY.lower() not in q.lower():
-        q = f"{q}, {LOCAL_POSTCODE} {LOCAL_CITY}, Oise, France"
+    low = norm(q)
+    if postcode not in low and norm(city) not in low:
+        q = f"{q}, {postcode} {city}, Oise, France"
     return q
 
 
 @st.cache_data(ttl=60 * 60)
-def geopf_completion(text: str, postcode: str = LOCAL_POSTCODE, city: str = LOCAL_CITY, max_resp: int = 7) -> List[Dict[str, Any]]:
+def geopf_completion(text: str, postcode: str, city: str, max_resp: int = 7) -> List[str]:
+    """Retourne une liste de labels."""
     if not text or len(text.strip()) < 3:
         return []
     params = {
@@ -193,25 +210,27 @@ def geopf_completion(text: str, postcode: str = LOCAL_POSTCODE, city: str = LOCA
     data = r.json()
 
     results = data.get("results") or data.get("features") or []
-    out: List[Dict[str, Any]] = []
+    out: List[str] = []
 
     for it in results:
         props = it.get("properties", it) if isinstance(it, dict) else {}
         label = props.get("label") or props.get("fulltext") or props.get("name")
         if not label:
             continue
+        # Filtre dur : CP + ville
         if postcode and postcode not in label:
             continue
-        if city and city.lower() not in label.lower():
+        if city and norm(city) not in norm(label):
             continue
-        out.append({"label": label})
+        out.append(label)
 
+    # dedup
     seen = set()
     dedup = []
-    for x in out:
-        if x["label"] not in seen:
-            dedup.append(x)
-            seen.add(x["label"])
+    for lab in out:
+        if lab not in seen:
+            dedup.append(lab)
+            seen.add(lab)
     return dedup
 
 
@@ -290,12 +309,52 @@ def eur(x: float) -> str:
     return f"{x:,.0f} €".replace(",", " ")
 
 
+def parse_display_choice(display_value: str) -> Tuple[Optional[str], str]:
+    """
+    display_value peut être:
+      - "Commune — label"
+      - "label" (si pas de préfixe)
+    Retourne (area_name ou None, label)
+    """
+    if " — " in (display_value or ""):
+        a, lab = display_value.split(" — ", 1)
+        a = a.strip()
+        lab = lab.strip()
+        if a in AREAS:
+            return a, lab
+        return None, lab
+    return None, (display_value or "").strip()
+
+
+def on_addr_choice_display_change():
+    """
+    ✅ Mini amélioration:
+    Quand l’utilisateur choisit une suggestion, on déduit automatiquement la commune
+    (si en mode auto), et on pré-remplit le selectbox commune + on verrouille sur cette commune.
+    """
+    display_val = st.session_state.get("addr_choice_display", "")
+    area, label = parse_display_choice(display_val)
+
+    # Always store raw label in addr_choice
+    st.session_state.addr_choice = label
+
+    # Si on a détecté une commune, on la sélectionne automatiquement
+    if area:
+        st.session_state.area_name = area
+
+
 # ---------------------------
 # Header
 # ---------------------------
+if st.session_state.area_name in AREAS:
+    ai = current_area_info()
+    badge_label = f"{st.session_state.area_name} ({ai['postcode']})"
+else:
+    badge_label = "Secteur Clermont & alentours"
+
 st.markdown("<h1>🏠 Estimation locale</h1>", unsafe_allow_html=True)
 st.markdown(
-    f"<div style='text-align:center; margin-bottom:0.6rem;'><span class='badge'>Zone : {LOCAL_LABEL}</span></div>",
+    f"<div style='text-align:center; margin-bottom:0.6rem;'><span class='badge'>Secteur : {badge_label}</span></div>",
     unsafe_allow_html=True,
 )
 st.markdown(
@@ -312,8 +371,13 @@ if st.session_state.step == 1:
     colL, colR = st.columns([1.2, 1], gap="large")
 
     with colL:
-        st.markdown("## 📋 Décrivez votre bien")
+        st.markdown("## 📍 Votre secteur")
 
+        area_options = [AUTO_AREA] + list(AREAS.keys())
+        st.selectbox("Choisissez la commune (ou laissez en auto)", area_options, key="area_name")
+
+        # Build suggestions
+        st.markdown("## 📋 Décrivez votre bien")
         c1, c2 = st.columns(2)
         with c1:
             st.selectbox("Type de bien", ["Maison", "Appartement"], key="bien_type")
@@ -323,36 +387,77 @@ if st.session_state.step == 1:
         with c2:
             st.number_input("Nombre de pièces", min_value=1, max_value=12, step=1, key="nb_pieces")
             st.number_input("Nombre de chambres", min_value=0, max_value=10, step=1, key="nb_chambres")
-            st.markdown(f"<div class='card soft'><b>Ville :</b> {LOCAL_LABEL}</div>", unsafe_allow_html=True)
+            st.markdown("<div class='small-note'>Plus l’adresse est précise, plus le résultat est fiable.</div>", unsafe_allow_html=True)
 
-        st.markdown("### 📍 Adresse (uniquement Clermont 60600)")
+        st.markdown("### 🧭 Adresse")
         st.text_input("Commencez à taper l’adresse", placeholder="Ex : 5 Rue du Chemin Blanc", key="addr_typed")
 
-        try:
-            suggestions = geopf_completion(st.session_state.addr_typed, postcode=LOCAL_POSTCODE, city=LOCAL_CITY)
-        except Exception:
-            suggestions = []
+        typed = st.session_state.addr_typed
 
-        if suggestions:
-            labels = [s["label"] for s in suggestions]
-            default_index = labels.index(st.session_state.addr_choice) if st.session_state.addr_choice in labels else 0
-            st.selectbox("Suggestions (Clermont uniquement)", labels, index=default_index, key="addr_choice")
+        suggestions_display: List[str] = []
+        if st.session_state.area_name == AUTO_AREA:
+            # ✅ Mode auto : on agrège les suggestions de toutes les communes (filtrées)
+            # Important : cache 1h par commune, donc c'est viable.
+            for area_name, info in AREAS.items():
+                try:
+                    labs = geopf_completion(typed, postcode=info["postcode"], city=info["city"], max_resp=5)
+                except Exception:
+                    labs = []
+                # Préfixe affichage pour transparence + détection
+                for lab in labs:
+                    suggestions_display.append(f"{area_name} — {lab}")
         else:
-            st.session_state.addr_choice = (st.session_state.addr_typed or "").strip()
+            ai = current_area_info()
+            try:
+                labs = geopf_completion(typed, postcode=ai["postcode"], city=ai["city"])
+            except Exception:
+                labs = []
+            suggestions_display = labs[:]  # pas de préfixe en mode verrouillé
 
-        st.markdown(
-            "<p class='small-note'>Pour une estimation plus fiable, l’outil est volontairement limité à "
-            "<b>Clermont-de-l’Oise (60600)</b>.</p>",
-            unsafe_allow_html=True,
-        )
+        # If we have suggestions, show selectbox with on_change detection
+        if suggestions_display:
+            # Choix par défaut: conserver selection précédente si possible
+            prev_display = st.session_state.get("addr_choice_display", "")
+            default_index = suggestions_display.index(prev_display) if prev_display in suggestions_display else 0
+
+            st.selectbox(
+                "Suggestions (secteur)",
+                suggestions_display,
+                index=default_index,
+                key="addr_choice_display",
+                on_change=on_addr_choice_display_change,
+            )
+        else:
+            # fallback: raw typed
+            st.session_state.addr_choice = (typed or "").strip()
+            st.session_state.addr_choice_display = st.session_state.addr_choice
+
+        # Affiche la zone détectée si on vient de choisir une suggestion en auto
+        if st.session_state.area_name != AUTO_AREA and st.session_state.area_name in AREAS:
+            ai = current_area_info()
+            st.markdown(
+                f"<div class='card soft'><b>Commune sélectionnée :</b> {st.session_state.area_name} — <b>CP :</b> {ai['postcode']}</div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                "<p class='small-note'>Astuce : en choisissant une suggestion, la commune peut se sélectionner automatiquement.</p>",
+                unsafe_allow_html=True,
+            )
 
         if st.button("🚀 Obtenir ma fourchette (sans engagement)", use_container_width=True):
-            addr_choice = (st.session_state.addr_choice or "").strip()
-            if not addr_choice or len(addr_choice) < 6:
-                st.error("Ajoute une adresse plus complète (ou choisis une suggestion à Clermont).")
+            # Si on est encore en auto, on refuse (il faut une commune détectée)
+            if st.session_state.area_name == AUTO_AREA:
+                st.error("Choisis une suggestion d’adresse (pour détecter la commune) ou sélectionne la commune manuellement.")
                 st.stop()
 
-            q = normalize_query_to_clermont(addr_choice)
+            ai = current_area_info()
+            addr_choice = (st.session_state.addr_choice or "").strip()
+            if not addr_choice or len(addr_choice) < 6:
+                st.error("Ajoute une adresse plus complète (ou choisis une suggestion dans le secteur).")
+                st.stop()
+
+            q = normalize_query_to_area(addr_choice, city=ai["city"], postcode=ai["postcode"])
 
             try:
                 geo = geopf_geocode_one(q)
@@ -363,10 +468,10 @@ if st.session_state.step == 1:
                 st.error("Impossible de géocoder l’adresse. Choisis une suggestion ou précise numéro + rue.")
                 st.stop()
 
-            # garde-fou Clermont
-            label_low = (geo.get("label") or "").lower()
-            if LOCAL_POSTCODE not in label_low and LOCAL_CITY.lower() not in label_low:
-                st.error("Cette adresse ne semble pas être à Clermont (60600). Choisis une suggestion dans Clermont.")
+            # garde-fou : CP + commune doivent matcher
+            label_low = norm(geo.get("label") or "")
+            if ai["postcode"] not in label_low or norm(ai["city"]) not in label_low:
+                st.error("Cette adresse ne semble pas être dans la commune sélectionnée. Choisis une suggestion du secteur.")
                 st.stop()
 
             distance_m = haversine_m(geo["lat"], geo["lon"], GARE_LAT, GARE_LON)
@@ -388,8 +493,8 @@ if st.session_state.step == 1:
         st.markdown("## 💎 Ce que vous obtenez")
         st.markdown(
             "<div class='card accent-top'>"
+            "✅ Adresse filtrée sur la commune (auto ou manuel)<br/>"
             "✅ Distance à la gare calculée automatiquement<br/>"
-            "✅ Quartier estimé (version simple, bientôt polygones réels)<br/>"
             "✅ Fourchette immédiate<br/>"
             "✅ Détails & comparables contre vos coordonnées"
             "</div>",
@@ -408,6 +513,12 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
     geo = st.session_state.geo
     res = st.session_state.res
 
+    if st.session_state.area_name in AREAS:
+        ai = current_area_info()
+        badge_label = f"{st.session_state.area_name} ({ai['postcode']})"
+    else:
+        badge_label = "Secteur"
+
     st.markdown("## ✨ Votre estimation (fourchette immédiate)")
 
     m1, m2, m3 = st.columns(3, gap="medium")
@@ -418,7 +529,7 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
         )
     with m2:
         st.markdown(
-            f"<div class='metric'><p class='k'>Quartier (approx.)</p><p class='v'>{res['quartier']}</p></div>",
+            f"<div class='metric'><p class='k'>Secteur</p><p class='v'>{badge_label}</p></div>",
             unsafe_allow_html=True,
         )
     with m3:
@@ -435,9 +546,7 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
 
     st.markdown("<hr/>", unsafe_allow_html=True)
 
-    # Controls row: back (secondary) + toggle
     left, right = st.columns([1, 1], gap="medium")
-
     with left:
         st.markdown("<div class='secondary-btn'>", unsafe_allow_html=True)
         if st.button("⬅️ Modifier les infos du bien", use_container_width=True):
@@ -449,7 +558,6 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
         st.toggle("Afficher l’explication (transparence)", key="show_explain")
 
     if st.session_state.show_explain:
-        # Pretty explanation card instead of raw JSON
         ex = res.get("explain", {})
         st.markdown("<div class='card accent-top'>", unsafe_allow_html=True)
         st.markdown("### 🧾 Détail du calcul (résumé)")
@@ -486,7 +594,11 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
         if not (st.session_state.prenom and st.session_state.email and st.session_state.telephone and st.session_state.consent):
             st.error("Il manque une info (ou le consentement).")
         else:
+            ai = current_area_info() if st.session_state.area_name in AREAS else {"postcode": "", "city": ""}
             st.session_state["lead"] = {
+                "secteur": st.session_state.area_name,
+                "code_postal": ai.get("postcode", ""),
+                "ville_api": ai.get("city", ""),
                 "prenom": st.session_state.prenom,
                 "email": st.session_state.email,
                 "telephone": st.session_state.telephone,

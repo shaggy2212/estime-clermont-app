@@ -47,15 +47,17 @@ st.session_state.setdefault("geo", None)
 st.session_state.setdefault("res", None)
 
 # Step 1 inputs
-st.session_state.setdefault("area_name", AUTO_AREA)  # auto par défaut
+st.session_state.setdefault("area_name", AUTO_AREA)  # selectbox key
+st.session_state.setdefault("area_locked", False)    # ✅ NEW: internal lock (no need to write into area_name)
+st.session_state.setdefault("detected_area", DEFAULT_AREA)  # ✅ NEW: detected area used when auto
 st.session_state.setdefault("bien_type", "Maison")
 st.session_state.setdefault("surface", 100.0)
 st.session_state.setdefault("etat", "Moyen")
 st.session_state.setdefault("nb_pieces", 3)
 st.session_state.setdefault("nb_chambres", 2)
 st.session_state.setdefault("addr_typed", "")
-st.session_state.setdefault("addr_choice", "")          # label brut
-st.session_state.setdefault("addr_choice_display", "")  # label affiché (peut contenir préfixe)
+st.session_state.setdefault("addr_choice", "")
+st.session_state.setdefault("addr_choice_display", "")
 
 # Contact
 st.session_state.setdefault("prenom", "")
@@ -75,9 +77,7 @@ st.markdown(
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
 * {{ font-family: 'Poppins', sans-serif !important; }}
 
-.main {{
-    background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%);
-}}
+.main {{ background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%); }}
 
 h1 {{
     color: {PRIMARY} !important;
@@ -85,11 +85,7 @@ h1 {{
     text-align: center !important;
     margin-bottom: 0.2rem !important;
 }}
-
-h2 {{
-    color: {PRIMARY} !important;
-    font-weight: 750 !important;
-}}
+h2 {{ color: {PRIMARY} !important; font-weight: 750 !important; }}
 
 .small-note {{ color:#4b5563; font-size:0.92rem; line-height:1.45; }}
 
@@ -104,11 +100,7 @@ h2 {{
   border: 1px solid rgba(0,0,0,0.06);
   overflow: hidden;
 }}
-
-.card.accent-top {{
-  border-top: 4px solid {ACCENT};
-}}
-
+.card.accent-top {{ border-top: 4px solid {ACCENT}; }}
 .card.soft {{
   background: linear-gradient(135deg, {SOFT} 0%, #ffffff 100%);
   border: 1px solid rgba(0, 77, 127, 0.10);
@@ -177,12 +169,6 @@ def norm(s: str) -> str:
     return (s or "").strip().lower().replace("’", "'")
 
 
-def current_area_info() -> Dict[str, str]:
-    if st.session_state.area_name in AREAS:
-        return AREAS[st.session_state.area_name]
-    return AREAS[DEFAULT_AREA]
-
-
 def normalize_query_to_area(q: str, city: str, postcode: str) -> str:
     q = (q or "").strip()
     if not q:
@@ -191,6 +177,24 @@ def normalize_query_to_area(q: str, city: str, postcode: str) -> str:
     if postcode not in low and norm(city) not in low:
         q = f"{q}, {postcode} {city}, Oise, France"
     return q
+
+
+def get_effective_area() -> Tuple[str, Dict[str, str]]:
+    """
+    ✅ Important correction:
+    - On ne modifie PLUS la valeur du selectbox (area_name) après interaction.
+    - Si l'utilisateur est en AUTO, on utilise detected_area (si présent).
+    """
+    if st.session_state.area_name in AREAS:
+        area = st.session_state.area_name
+        return area, AREAS[area]
+
+    # AUTO mode
+    detected = st.session_state.get("detected_area")
+    if detected in AREAS:
+        return detected, AREAS[detected]
+
+    return DEFAULT_AREA, AREAS[DEFAULT_AREA]
 
 
 @st.cache_data(ttl=60 * 60)
@@ -316,7 +320,6 @@ def parse_display_choice(display_value: str) -> Tuple[Optional[str], str]:
     Retourne (area_name ou None, label)
     """
     s = (display_value or "").strip()
-
     for sep in [" — ", "—", " - ", "-"]:
         if sep in s:
             a, lab = s.split(sep, 1)
@@ -325,33 +328,30 @@ def parse_display_choice(display_value: str) -> Tuple[Optional[str], str]:
             if a in AREAS:
                 return a, lab
             return None, lab
-
     return None, s
 
 
 def on_addr_choice_display_change():
     """
-    Quand l’utilisateur choisit une suggestion, on déduit la commune et on la sélectionne.
+    ✅ Correction majeure:
+    On ne touche plus au selectbox 'area_name' (sinon StreamlitAPIException).
+    On stocke la détection dans 'detected_area' + on garde area_name sur AUTO.
     """
     display_val = st.session_state.get("addr_choice_display", "")
     area, label = parse_display_choice(display_val)
 
-    # Always store raw label
     st.session_state.addr_choice = label
 
-    # If we can detect, switch to that area
     if area:
-        st.session_state.area_name = area
+        st.session_state.detected_area = area
+        st.session_state.area_locked = True
 
 
 # ---------------------------
 # Header
 # ---------------------------
-if st.session_state.area_name in AREAS:
-    ai = current_area_info()
-    badge_label = f"{st.session_state.area_name} ({ai['postcode']})"
-else:
-    badge_label = "Clermont & alentours"
+effective_area, effective_info = get_effective_area()
+badge_label = f"{effective_area} ({effective_info['postcode']})" if effective_area in AREAS else "Clermont & alentours"
 
 st.markdown("<h1>🏠 Estimation locale</h1>", unsafe_allow_html=True)
 st.markdown(
@@ -373,8 +373,25 @@ if st.session_state.step == 1:
 
     with colL:
         st.markdown("## 📍 Votre secteur")
+
         area_options = [AUTO_AREA] + list(AREAS.keys())
         st.selectbox("Choisissez la commune (ou laissez en auto)", area_options, key="area_name")
+
+        # If user manually chooses an area, override detection
+        if st.session_state.area_name in AREAS:
+            st.session_state.detected_area = st.session_state.area_name
+            st.session_state.area_locked = True
+        else:
+            # Stay in auto; if nothing detected yet, keep default
+            if st.session_state.get("detected_area") not in AREAS:
+                st.session_state.detected_area = DEFAULT_AREA
+
+        effective_area, ai = get_effective_area()
+
+        st.markdown(
+            f"<div class='card soft'><b>Commune utilisée pour la recherche :</b> {effective_area} — <b>CP :</b> {ai['postcode']}</div>",
+            unsafe_allow_html=True,
+        )
 
         st.markdown("## 📋 Décrivez votre bien")
         c1, c2 = st.columns(2)
@@ -403,7 +420,7 @@ if st.session_state.step == 1:
                 for lab in labs:
                     suggestions_display.append(f"{area_name} — {lab}")
         else:
-            ai = current_area_info()
+            # Mode manuel: commune verrouillée
             try:
                 labs = geopf_completion(typed, postcode=ai["postcode"], city=ai["city"])
             except Exception:
@@ -425,33 +442,39 @@ if st.session_state.step == 1:
             st.session_state.addr_choice = (typed or "").strip()
             st.session_state.addr_choice_display = st.session_state.addr_choice
 
-        # Feedback zone
-        if st.session_state.area_name != AUTO_AREA and st.session_state.area_name in AREAS:
-            ai = current_area_info()
-            st.markdown(
-                f"<div class='card soft'><b>Commune sélectionnée :</b> {st.session_state.area_name} — <b>CP :</b> {ai['postcode']}</div>",
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown(
-                "<p class='small-note'>Astuce : en choisissant une suggestion, la commune se sélectionne automatiquement.</p>",
-                unsafe_allow_html=True,
-            )
+        # Feedback
+        if st.session_state.area_name == AUTO_AREA:
+            detected = st.session_state.get("detected_area")
+            if detected in AREAS and st.session_state.area_locked:
+                inf = AREAS[detected]
+                st.markdown(
+                    f"<div class='card soft'><b>Commune détectée :</b> {detected} — <b>CP :</b> {inf['postcode']}</div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    "<p class='small-note'>Astuce : choisissez une suggestion (préfixée par la commune) pour détecter automatiquement.</p>",
+                    unsafe_allow_html=True,
+                )
 
         if st.button("🚀 Obtenir ma fourchette (sans engagement)", use_container_width=True):
 
-            # ✅ FIX ROBUSTE: si encore en AUTO au moment du clic, on déduit depuis la sélection
+            # ✅ FIX ROBUSTE: si AUTO, on déduit depuis la sélection au moment du clic
             if st.session_state.area_name == AUTO_AREA:
                 detected_area, detected_label = parse_display_choice(st.session_state.get("addr_choice_display", ""))
                 if detected_area:
-                    st.session_state.area_name = detected_area
+                    st.session_state.detected_area = detected_area
+                    st.session_state.area_locked = True
                     st.session_state.addr_choice = detected_label
+                elif st.session_state.get("detected_area") in AREAS and st.session_state.area_locked:
+                    # ok, already detected previously
+                    pass
                 else:
                     st.error("Choisis une suggestion d’adresse (pour détecter la commune) ou sélectionne la commune manuellement.")
                     st.stop()
 
-            # On a une commune verrouillée
-            ai = current_area_info()
+            # Use effective area (manual or detected)
+            effective_area, ai = get_effective_area()
 
             addr_choice = (st.session_state.addr_choice or "").strip()
             if not addr_choice or len(addr_choice) < 6:
@@ -471,7 +494,7 @@ if st.session_state.step == 1:
 
             label_low = norm(geo.get("label") or "")
             if ai["postcode"] not in label_low or norm(ai["city"]) not in label_low:
-                st.error("Cette adresse ne semble pas être dans la commune sélectionnée. Choisis une suggestion du secteur.")
+                st.error("Cette adresse ne semble pas être dans la commune sélectionnée/détectée. Choisis une suggestion du secteur.")
                 st.stop()
 
             distance_m = haversine_m(geo["lat"], geo["lon"], GARE_LAT, GARE_LON)
@@ -502,7 +525,7 @@ if st.session_state.step == 1:
         )
         st.markdown(
             "<div class='card soft'><b>Note :</b> l’estimation est indicative. L’affinage final se fait après vérification "
-            "(état réel, travaux, terrain, nuisances, etc.).</div>",
+            "(état réel, travaux, terrain, nuisances, exposition, prestations) — et les comparables DVF.</div>",
             unsafe_allow_html=True,
         )
 
@@ -513,11 +536,8 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
     geo = st.session_state.geo
     res = st.session_state.res
 
-    if st.session_state.area_name in AREAS:
-        ai = current_area_info()
-        badge_label = f"{st.session_state.area_name} ({ai['postcode']})"
-    else:
-        badge_label = "Secteur"
+    effective_area, ai = get_effective_area()
+    badge_label = f"{effective_area} ({ai['postcode']})"
 
     st.markdown("## ✨ Votre estimation (fourchette immédiate)")
 
@@ -594,9 +614,8 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
         if not (st.session_state.prenom and st.session_state.email and st.session_state.telephone and st.session_state.consent):
             st.error("Il manque une info (ou le consentement).")
         else:
-            ai = current_area_info() if st.session_state.area_name in AREAS else {"postcode": "", "city": ""}
             st.session_state["lead"] = {
-                "secteur": st.session_state.area_name,
+                "secteur_effectif": effective_area,
                 "code_postal": ai.get("postcode", ""),
                 "ville_api": ai.get("city", ""),
                 "prenom": st.session_state.prenom,
@@ -615,5 +634,4 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                 "estimation_min": float(res["min"]),
                 "estimation_max": float(res["max"]),
             }
-
             st.success(f"Merci {st.session_state.prenom} ✅ Je te contacte rapidement pour affiner et te donner des comparables précis.")

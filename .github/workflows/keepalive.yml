@@ -2,7 +2,7 @@ name: Keep Streamlit Awake
 
 on:
   schedule:
-    - cron: "*/10 * * * *"   # toutes les 30 minutes
+    - cron: "*/15 * * * *"
   workflow_dispatch:
 
 jobs:
@@ -14,12 +14,24 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
 
-      - name: Install dependencies
+      # Cache des navigateurs Playwright
+      - name: Cache Playwright browsers
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('wake-streamlit.js') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install dependencies (fast)
         run: |
-          npm init -y
+          if [ ! -f package.json ]; then npm init -y; fi
           npm i -D playwright
-          npx playwright install --with-deps chromium
+
+      - name: Install Chromium if needed (cached)
+        run: npx playwright install chromium
 
       - name: Run wake script
         env:

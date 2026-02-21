@@ -47,14 +47,14 @@ st.session_state.setdefault("geo", None)
 st.session_state.setdefault("res", None)
 
 # Step 1 inputs
-st.session_state.setdefault("area_name", AUTO_AREA)  # ✅ auto par défaut
+st.session_state.setdefault("area_name", AUTO_AREA)  # auto par défaut
 st.session_state.setdefault("bien_type", "Maison")
-st.session_state.setdefault("surface", 100.0)  # float
+st.session_state.setdefault("surface", 100.0)
 st.session_state.setdefault("etat", "Moyen")
-st.session_state.setdefault("nb_pieces", 3)     # int
-st.session_state.setdefault("nb_chambres", 2)   # int
+st.session_state.setdefault("nb_pieces", 3)
+st.session_state.setdefault("nb_chambres", 2)
 st.session_state.setdefault("addr_typed", "")
-st.session_state.setdefault("addr_choice", "")          # label brut (sans préfixe)
+st.session_state.setdefault("addr_choice", "")          # label brut
 st.session_state.setdefault("addr_choice_display", "")  # label affiché (peut contenir préfixe)
 
 # Contact
@@ -195,7 +195,6 @@ def normalize_query_to_area(q: str, city: str, postcode: str) -> str:
 
 @st.cache_data(ttl=60 * 60)
 def geopf_completion(text: str, postcode: str, city: str, max_resp: int = 7) -> List[str]:
-    """Retourne une liste de labels."""
     if not text or len(text.strip()) < 3:
         return []
     params = {
@@ -217,14 +216,12 @@ def geopf_completion(text: str, postcode: str, city: str, max_resp: int = 7) -> 
         label = props.get("label") or props.get("fulltext") or props.get("name")
         if not label:
             continue
-        # Filtre dur : CP + ville
         if postcode and postcode not in label:
             continue
         if city and norm(city) not in norm(label):
             continue
         out.append(label)
 
-    # dedup
     seen = set()
     dedup = []
     for lab in out:
@@ -313,32 +310,36 @@ def parse_display_choice(display_value: str) -> Tuple[Optional[str], str]:
     """
     display_value peut être:
       - "Commune — label"
-      - "label" (si pas de préfixe)
+      - "Commune—label"
+      - "Commune - label"
+      - "label"
     Retourne (area_name ou None, label)
     """
-    if " — " in (display_value or ""):
-        a, lab = display_value.split(" — ", 1)
-        a = a.strip()
-        lab = lab.strip()
-        if a in AREAS:
-            return a, lab
-        return None, lab
-    return None, (display_value or "").strip()
+    s = (display_value or "").strip()
+
+    for sep in [" — ", "—", " - ", "-"]:
+        if sep in s:
+            a, lab = s.split(sep, 1)
+            a = a.strip()
+            lab = lab.strip()
+            if a in AREAS:
+                return a, lab
+            return None, lab
+
+    return None, s
 
 
 def on_addr_choice_display_change():
     """
-    ✅ Mini amélioration:
-    Quand l’utilisateur choisit une suggestion, on déduit automatiquement la commune
-    (si en mode auto), et on pré-remplit le selectbox commune + on verrouille sur cette commune.
+    Quand l’utilisateur choisit une suggestion, on déduit la commune et on la sélectionne.
     """
     display_val = st.session_state.get("addr_choice_display", "")
     area, label = parse_display_choice(display_val)
 
-    # Always store raw label in addr_choice
+    # Always store raw label
     st.session_state.addr_choice = label
 
-    # Si on a détecté une commune, on la sélectionne automatiquement
+    # If we can detect, switch to that area
     if area:
         st.session_state.area_name = area
 
@@ -350,7 +351,7 @@ if st.session_state.area_name in AREAS:
     ai = current_area_info()
     badge_label = f"{st.session_state.area_name} ({ai['postcode']})"
 else:
-    badge_label = "Secteur Clermont & alentours"
+    badge_label = "Clermont & alentours"
 
 st.markdown("<h1>🏠 Estimation locale</h1>", unsafe_allow_html=True)
 st.markdown(
@@ -372,11 +373,9 @@ if st.session_state.step == 1:
 
     with colL:
         st.markdown("## 📍 Votre secteur")
-
         area_options = [AUTO_AREA] + list(AREAS.keys())
         st.selectbox("Choisissez la commune (ou laissez en auto)", area_options, key="area_name")
 
-        # Build suggestions
         st.markdown("## 📋 Décrivez votre bien")
         c1, c2 = st.columns(2)
         with c1:
@@ -391,19 +390,16 @@ if st.session_state.step == 1:
 
         st.markdown("### 🧭 Adresse")
         st.text_input("Commencez à taper l’adresse", placeholder="Ex : 5 Rue du Chemin Blanc", key="addr_typed")
-
         typed = st.session_state.addr_typed
 
         suggestions_display: List[str] = []
         if st.session_state.area_name == AUTO_AREA:
-            # ✅ Mode auto : on agrège les suggestions de toutes les communes (filtrées)
-            # Important : cache 1h par commune, donc c'est viable.
+            # Mode auto: on agrège suggestions de toutes les communes
             for area_name, info in AREAS.items():
                 try:
                     labs = geopf_completion(typed, postcode=info["postcode"], city=info["city"], max_resp=5)
                 except Exception:
                     labs = []
-                # Préfixe affichage pour transparence + détection
                 for lab in labs:
                     suggestions_display.append(f"{area_name} — {lab}")
         else:
@@ -412,11 +408,9 @@ if st.session_state.step == 1:
                 labs = geopf_completion(typed, postcode=ai["postcode"], city=ai["city"])
             except Exception:
                 labs = []
-            suggestions_display = labs[:]  # pas de préfixe en mode verrouillé
+            suggestions_display = labs[:]
 
-        # If we have suggestions, show selectbox with on_change detection
         if suggestions_display:
-            # Choix par défaut: conserver selection précédente si possible
             prev_display = st.session_state.get("addr_choice_display", "")
             default_index = suggestions_display.index(prev_display) if prev_display in suggestions_display else 0
 
@@ -428,11 +422,10 @@ if st.session_state.step == 1:
                 on_change=on_addr_choice_display_change,
             )
         else:
-            # fallback: raw typed
             st.session_state.addr_choice = (typed or "").strip()
             st.session_state.addr_choice_display = st.session_state.addr_choice
 
-        # Affiche la zone détectée si on vient de choisir une suggestion en auto
+        # Feedback zone
         if st.session_state.area_name != AUTO_AREA and st.session_state.area_name in AREAS:
             ai = current_area_info()
             st.markdown(
@@ -441,17 +434,25 @@ if st.session_state.step == 1:
             )
         else:
             st.markdown(
-                "<p class='small-note'>Astuce : en choisissant une suggestion, la commune peut se sélectionner automatiquement.</p>",
+                "<p class='small-note'>Astuce : en choisissant une suggestion, la commune se sélectionne automatiquement.</p>",
                 unsafe_allow_html=True,
             )
 
         if st.button("🚀 Obtenir ma fourchette (sans engagement)", use_container_width=True):
-            # Si on est encore en auto, on refuse (il faut une commune détectée)
-            if st.session_state.area_name == AUTO_AREA:
-                st.error("Choisis une suggestion d’adresse (pour détecter la commune) ou sélectionne la commune manuellement.")
-                st.stop()
 
+            # ✅ FIX ROBUSTE: si encore en AUTO au moment du clic, on déduit depuis la sélection
+            if st.session_state.area_name == AUTO_AREA:
+                detected_area, detected_label = parse_display_choice(st.session_state.get("addr_choice_display", ""))
+                if detected_area:
+                    st.session_state.area_name = detected_area
+                    st.session_state.addr_choice = detected_label
+                else:
+                    st.error("Choisis une suggestion d’adresse (pour détecter la commune) ou sélectionne la commune manuellement.")
+                    st.stop()
+
+            # On a une commune verrouillée
             ai = current_area_info()
+
             addr_choice = (st.session_state.addr_choice or "").strip()
             if not addr_choice or len(addr_choice) < 6:
                 st.error("Ajoute une adresse plus complète (ou choisis une suggestion dans le secteur).")
@@ -468,7 +469,6 @@ if st.session_state.step == 1:
                 st.error("Impossible de géocoder l’adresse. Choisis une suggestion ou précise numéro + rue.")
                 st.stop()
 
-            # garde-fou : CP + commune doivent matcher
             label_low = norm(geo.get("label") or "")
             if ai["postcode"] not in label_low or norm(ai["city"]) not in label_low:
                 st.error("Cette adresse ne semble pas être dans la commune sélectionnée. Choisis une suggestion du secteur.")

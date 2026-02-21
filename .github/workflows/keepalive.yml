@@ -14,22 +14,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('wake-streamlit.js') }}
+          key: ${{ runner.os }}-playwright
           restore-keys: |
-            ${{ runner.os }}-playwright-
+            ${{ runner.os }}-playwright
 
       - name: Install dependencies (fast)
         run: |
           if [ ! -f package.json ]; then npm init -y; fi
           npm i -D playwright
 
-      - name: Install Chromium if needed (cached)
+      - name: Install Chromium (cached if already present)
         run: npx playwright install chromium
 
       - name: Run wake script

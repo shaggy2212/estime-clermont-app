@@ -25,7 +25,7 @@ GEOPF_COMPLETION_URL = "https://data.geopf.fr/geocodage/completion/"
 GEOPF_SEARCH_URL = "https://data.geopf.fr/geocodage/search"
 
 # ---------------------------
-# Session state (fix navigation step)
+# Session state (stable step + widgets keys aligned)
 # ---------------------------
 if "step" not in st.session_state:
     st.session_state.step = 1
@@ -34,20 +34,28 @@ if "geo" not in st.session_state:
 if "res" not in st.session_state:
     st.session_state.res = None
 
-# Optional: persist step-1 inputs so returning doesn't reset everything
-defaults = {
-    "bien_type": "Maison",
-    "surface": 100.0,
-    "etat": "Moyen",
-    "nb_pieces": 3,
-    "nb_chambres": 2,
-    "code_postal": "60600",
-    "addr_typed": "",
-    "addr_choice": "",
-}
-for k, v in defaults.items():
+# Step-1 widget state (keys == widget keys)
+if "bien_type" not in st.session_state:
+    st.session_state.bien_type = "Maison"
+if "surface" not in st.session_state:
+    st.session_state.surface = 100.0  # float partout
+if "etat" not in st.session_state:
+    st.session_state.etat = "Moyen"
+if "nb_pieces" not in st.session_state:
+    st.session_state.nb_pieces = 3
+if "nb_chambres" not in st.session_state:
+    st.session_state.nb_chambres = 2
+if "code_postal" not in st.session_state:
+    st.session_state.code_postal = "60600"
+if "addr_typed" not in st.session_state:
+    st.session_state.addr_typed = ""
+if "addr_choice" not in st.session_state:
+    st.session_state.addr_choice = ""
+
+# Contact widget state (optional but avoids KeyError)
+for k in ["prenom", "email", "telephone", "consent"]:
     if k not in st.session_state:
-        st.session_state[k] = v
+        st.session_state[k] = "" if k != "consent" else False
 
 # ---------------------------
 # UI style (léger)
@@ -113,7 +121,7 @@ def geopf_completion(text: str, postcode: str = "60600", max_resp: int = 7) -> L
         return []
     params = {
         "text": text.strip(),
-        "terr": postcode,
+        "terr": postcode,            # restriction géographique (selon doc)
         "type": "StreetAddress",
         "maximumResponses": max_resp,
     }
@@ -130,13 +138,12 @@ def geopf_completion(text: str, postcode: str = "60600", max_resp: int = 7) -> L
         if label:
             out.append({"label": label})
 
-    # If API already returns label-based list
     if results and isinstance(results, list) and isinstance(results[0], dict) and results[0].get("label"):
-        out = results  # type: ignore[assignment]
+        out = results  # API already in expected format
 
     # Deduplicate
     seen = set()
-    dedup = []
+    dedup: List[Dict[str, Any]] = []
     for x in out:
         lab = x.get("label")
         if lab and lab not in seen:
@@ -253,49 +260,50 @@ if st.session_state.step == 1:
         st.markdown("## 📋 Décrivez votre bien")
 
         c1, c2 = st.columns(2)
+
         with c1:
-            st.session_state.bien_type = st.selectbox(
+            st.selectbox(
                 "Type de bien",
                 ["Maison", "Appartement"],
-                index=0 if st.session_state.bien_type == "Maison" else 1,
-                key="bien_type_select",
+                key="bien_type",
             )
-            st.session_state.surface = st.number_input(
+            st.number_input(
                 "Surface (m²)",
-                min_value=10,
-                max_value=500,
-                value=float(st.session_state.surface),
-                key="surface_input",
+                min_value=10.0,
+                max_value=500.0,
+                step=1.0,
+                key="surface",  # float partout
             )
-            st.session_state.etat = st.selectbox(
+            st.selectbox(
                 "État du bien",
                 ["À rénover", "Moyen", "Bon", "Rénové"],
-                index=["À rénover", "Moyen", "Bon", "Rénové"].index(st.session_state.etat),
-                key="etat_select",
+                key="etat",
             )
+
         with c2:
-            st.session_state.nb_pieces = st.number_input(
+            st.number_input(
                 "Nombre de pièces",
                 min_value=1,
                 max_value=12,
                 value=int(st.session_state.nb_pieces),
-                key="pieces_input",
+                step=1,
+                key="nb_pieces",  # int partout
             )
-            st.session_state.nb_chambres = st.number_input(
+            st.number_input(
                 "Nombre de chambres",
                 min_value=0,
                 max_value=10,
                 value=int(st.session_state.nb_chambres),
-                key="chambres_input",
+                step=1,
+                key="nb_chambres",  # int partout
             )
-            st.session_state.code_postal = st.text_input("Code postal", value=st.session_state.code_postal, key="cp_input")
+            st.text_input("Code postal", key="code_postal")
 
         st.markdown("### 📍 Adresse")
-        st.session_state.addr_typed = st.text_input(
+        st.text_input(
             "Commencez à taper l’adresse",
             placeholder="Ex : 3 rue Émile Bousseau",
-            value=st.session_state.addr_typed,
-            key="addr_typed_input",
+            key="addr_typed",
         )
 
         suggestions: List[Dict[str, Any]] = []
@@ -306,14 +314,19 @@ if st.session_state.step == 1:
 
         if suggestions:
             labels = [s["label"] for s in suggestions]
-            # default to previous choice if still available
             default_index = 0
             if st.session_state.addr_choice in labels:
                 default_index = labels.index(st.session_state.addr_choice)
 
-            st.session_state.addr_choice = st.selectbox("Suggestions", labels, index=default_index, key="addr_suggest_select")
+            st.selectbox(
+                "Suggestions",
+                labels,
+                index=default_index,
+                key="addr_choice",
+            )
         else:
-            st.session_state.addr_choice = st.session_state.addr_typed.strip()
+            # fallback: addr_choice follows typed address
+            st.session_state.addr_choice = (st.session_state.addr_typed or "").strip()
 
         st.markdown(
             "<p class='small-note'>Astuce : choisissez une suggestion pour améliorer la précision "
@@ -418,15 +431,14 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
 
     st.markdown("## 📩 Recevoir le détail (comparables + explication)")
 
-    # Contact form to prevent step bouncing on checkbox rerun
     with st.form("contact_form", clear_on_submit=False):
         c1, c2 = st.columns(2)
         with c1:
-            prenom = st.text_input("Votre prénom", key="prenom")
-            email = st.text_input("Votre email", key="email")
+            st.text_input("Votre prénom", key="prenom")
+            st.text_input("Votre email", key="email")
         with c2:
-            telephone = st.text_input("Votre téléphone", key="telephone")
-            consent = st.checkbox(
+            st.text_input("Votre téléphone", key="telephone")
+            st.checkbox(
                 "J’accepte d’être recontacté au sujet de cette estimation (sans spam).",
                 key="consent",
             )
@@ -434,14 +446,14 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
         submitted = st.form_submit_button("✅ Envoyer le détail + être rappelé", use_container_width=True)
 
     if submitted:
-        if not (st.session_state.get("prenom") and st.session_state.get("email") and st.session_state.get("telephone") and st.session_state.get("consent")):
+        if not (st.session_state.prenom and st.session_state.email and st.session_state.telephone and st.session_state.consent):
             st.error("Il manque une info (ou le consentement).")
         else:
             # Ici tu enregistres en base / Airtable / Notion / Sheets / webhook CRM
             st.session_state["lead"] = {
-                "prenom": st.session_state["prenom"],
-                "email": st.session_state["email"],
-                "telephone": st.session_state["telephone"],
+                "prenom": st.session_state.prenom,
+                "email": st.session_state.email,
+                "telephone": st.session_state.telephone,
                 "adresse": geo.get("label", st.session_state.addr_choice),
                 "lat": geo["lat"],
                 "lon": geo["lon"],
@@ -456,4 +468,4 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                 "estimation_max": float(res["max"]),
             }
 
-            st.success(f"Merci {st.session_state['prenom']} ✅ Je te contacte rapidement pour affiner et te donner des comparables précis.")
+            st.success(f"Merci {st.session_state.prenom} ✅ Je te contacte rapidement pour affiner et te donner des comparables précis.")

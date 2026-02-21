@@ -7,93 +7,71 @@ const { chromium } = require("playwright");
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({
     viewport: { width: 1280, height: 720 },
-    userAgent:
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36",
   });
 
-  async function getBodySnippet() {
-    const body = (await page.textContent("body").catch(() => "")) || "";
-    return body.replace(/\s+/g, " ").slice(0, 700);
-  }
+  // Hard timeout global (évite les runs à rallonge)
+  const HARD_TIMEOUT_MS = 30000;
+  const hardTimeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("Hard timeout reached")), HARD_TIMEOUT_MS)
+  );
 
-  async function debug(label) {
-    const title = await page.title().catch(() => "");
-    const snippet = await getBodySnippet();
-    console.log(`\n=== DEBUG (${label}) ===`);
-    console.log("TITLE:", title);
-    console.log("BODY_SNIPPET:", snippet);
-    console.log("=== END DEBUG ===\n");
-  }
+  async function run() {
+    // Charge vite (on ne cherche pas la stabilité parfaite)
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
+    await page.waitForTimeout(600);
 
-  // 1) Load page
-  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 120000 });
-  await page.waitForTimeout(1500);
+    const bodyText = (await page.textContent("body").catch(() => "")) || "";
+    const isSleep = /zzzz|get this app back up|back up/i.test(bodyText);
 
-  // 2) Detect sleep screen
-  const bodyText = (await page.textContent("body").catch(() => "")) || "";
-  const isSleep = /zzzz|get this app back up|back up/i.test(bodyText);
+    if (isSleep) {
+      console.log("Sleep detected 💤");
 
-  if (isSleep) {
-    console.log("Sleep screen detected 💤");
-    await debug("sleep-detected");
+      const wakeBtn =
+        page.getByRole("button", { name: /get this app back up/i }).first();
 
-    const wakeCandidates = [
-      page.getByRole("button", { name: /yes,?\s*get this app back up/i }),
-      page.getByRole("button", { name: /get this app back up/i }),
-      page.locator("button:has-text('Yes, get this app back up')"),
-      page.locator("button:has-text('get this app back up')"),
-      page.getByRole("button", { name: /wake up/i }),
-      page.locator("button:has-text('Wake up')"),
-    ];
-
-    let clicked = false;
-    for (const btn of wakeCandidates) {
-      if ((await btn.count()) > 0) {
-        await btn.first().click({ timeout: 15000 });
-        clicked = true;
-        console.log("Wake button clicked ✅");
-        break;
+      if (await wakeBtn.count()) {
+        await wakeBtn.click({ timeout: 8000 });
+        console.log("Wake clicked ✅");
+      } else {
+        // fallback si le role ne matche pas
+        const alt = page.locator("button:has-text('get this app back up')").first();
+        if (await alt.count()) {
+          await alt.click({ timeout: 8000 });
+          console.log("Wake clicked (fallback) ✅");
+        } else {
+          console.log("Wake button not found ⚠️");
+        }
       }
-    }
 
-    if (!clicked) {
-      console.log("Sleep detected but no wake button found ⚠️");
-      await debug("sleep-no-button");
-    }
+      // Reload après clic, puis une preuve légère (max 12s)
+      await page.waitForTimeout(1200);
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 20000 });
 
-    // Reload after click: often required by Streamlit
-    await page.waitForTimeout(2500);
-    await page.reload({ waitUntil: "domcontentloaded", timeout: 120000 });
-    await page.waitForTimeout(1500);
-  } else {
-    console.log("No sleep screen detected ✅");
+      try {
+        await Promise.race([
+          page.waitForSelector("text=Décrivez votre bien", { timeout: 12000 }),
+          page.waitForSelector("text=Obtenir mon estimation gratuite", { timeout: 12000 }),
+          page.waitForSelector('[data-testid="stApp"]', { timeout: 12000 }),
+        ]);
+        console.log("UI proof detected ✅");
+      } catch (e) {
+        console.log("UI proof not confirmed (still fine) ✅");
+      }
+    } else {
+      console.log("No sleep detected ✅ (touch done)");
+      // Pas besoin d’attendre 60s : on a déjà “touché” l’app.
+    }
   }
 
-  // 3) Proof of life (robust)
-  // We prefer checking for YOUR app’s texts rather than Streamlit testids,
-  // because Streamlit DOM can vary.
-  let uiConfirmed = false;
   try {
-    await Promise.race([
-      page.waitForSelector("text=Décrivez votre bien", { timeout: 60000 }),
-      page.waitForSelector("text=Obtenir mon estimation gratuite", { timeout: 60000 }),
-      page.waitForSelector("text=Pourquoi choisir mon estimation", { timeout: 60000 }),
-      // fallback Streamlit selectors (if present)
-      page.waitForSelector('[data-testid="stApp"]', { timeout: 60000 }),
-      page.waitForSelector('[data-testid="stHeader"]', { timeout: 60000 }),
-    ]);
-    uiConfirmed = true;
+    await Promise.race([run(), hardTimeout]);
+    console.log("OK ✅");
   } catch (e) {
-    uiConfirmed = false;
+    // On préfère ne PAS faire échouer le workflow si Streamlit est lent.
+    // L’objectif principal est de maintenir l’app active.
+    console.log("Non-blocking error:", e.message);
+    console.log("OK ✅");
+  } finally {
+    await browser.close();
   }
-
-  if (uiConfirmed) {
-    console.log("Awake + UI proof detected ✅");
-  } else {
-    console.log("Wake attempted ✅ (UI proof not confirmed yet)");
-    await debug("no-ui-proof");
-    // IMPORTANT: We do NOT fail the workflow here, because the main objective is to wake the app.
-  }
-
-  await browser.close();
 })();

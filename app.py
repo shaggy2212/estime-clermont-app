@@ -48,17 +48,17 @@ st.session_state.setdefault("geo", None)
 st.session_state.setdefault("res", None)
 
 # Step 1 inputs
-st.session_state.setdefault("area_name", AUTO_AREA)        # selectbox key
-st.session_state.setdefault("area_locked", False)          # internal lock
-st.session_state.setdefault("detected_area", DEFAULT_AREA) # detected area used when AUTO
+st.session_state.setdefault("area_name", AUTO_AREA)         # selectbox key
+st.session_state.setdefault("area_locked", False)           # internal lock
+st.session_state.setdefault("detected_area", DEFAULT_AREA)  # detected area used when AUTO
 st.session_state.setdefault("bien_type", "Maison")
 st.session_state.setdefault("surface", 100.0)
 st.session_state.setdefault("etat", "Moyen")
 st.session_state.setdefault("nb_pieces", 3)
 st.session_state.setdefault("nb_chambres", 2)
 st.session_state.setdefault("addr_typed", "")
-st.session_state.setdefault("addr_choice", "")            # label brut
-st.session_state.setdefault("addr_choice_display", "")    # label affiché (peut contenir préfixe)
+st.session_state.setdefault("addr_choice", "")
+st.session_state.setdefault("addr_choice_display", "")
 
 # Contact
 st.session_state.setdefault("prenom", "")
@@ -68,7 +68,7 @@ st.session_state.setdefault("consent", False)
 
 # UI
 st.session_state.setdefault("show_explain", False)
-st.session_state.setdefault("scroll_to_step2_top", False)  # ✅ NEW: reliable scroll flag
+st.session_state.setdefault("scroll_to_step2_top", False)  # ✅
 
 # ---------------------------
 # CSS
@@ -78,7 +78,6 @@ st.markdown(
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
 * {{ font-family: 'Poppins', sans-serif !important; }}
-
 .main {{ background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%); }}
 
 h1 {{
@@ -155,7 +154,7 @@ hr {{ border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 1.3rem 0; }}
 )
 
 # ---------------------------
-# Reliable scroll injection (MUST be near top of script)
+# Reliable scroll injection (FIXED)
 # ---------------------------
 _scroll_slot = st.empty()
 
@@ -164,36 +163,34 @@ def request_scroll_to_step2_top():
 
 def do_scroll_to_step2_top_if_needed():
     """
-    ✅ Fix "landing on contact form":
-    Streamlit often preserves scroll position after rerun.
-    This JS runs at the very top of the app (via _scroll_slot),
-    and scrolls to a dedicated anchor in Step 2.
+    FIX: st.empty() returns a DeltaGenerator, which doesn't have ".components".
+    Use components.html directly (rendered at top via this call site).
     """
     if st.session_state.get("scroll_to_step2_top"):
-        _scroll_slot.components.v1.html(
-            """
-            <script>
-              (function(){
-                function go(){
-                  const el = document.getElementById('step2-top-anchor');
-                  if (el && el.scrollIntoView) {
-                    el.scrollIntoView({block: 'start'});
-                  }
-                  window.scrollTo(0,0);
-                }
-                setTimeout(go, 30);
-                setTimeout(go, 120);
-                setTimeout(go, 300);
-              })();
-            </script>
-            """,
-            height=0,
-        )
+        with _scroll_slot:
+            components.html(
+                """
+                <script>
+                  (function(){
+                    function go(){
+                      const el = document.getElementById('step2-top-anchor');
+                      if (el && el.scrollIntoView) {
+                        el.scrollIntoView({block: 'start'});
+                      }
+                      window.scrollTo(0,0);
+                    }
+                    setTimeout(go, 30);
+                    setTimeout(go, 120);
+                    setTimeout(go, 300);
+                  })();
+                </script>
+                """,
+                height=0,
+            )
         st.session_state.scroll_to_step2_top = False
     else:
         _scroll_slot.empty()
 
-# Run scroll handler early
 do_scroll_to_step2_top_if_needed()
 
 # ---------------------------
@@ -394,7 +391,6 @@ if st.session_state.step == 1:
         area_options = [AUTO_AREA] + list(AREAS.keys())
         st.selectbox("Choisissez la commune (ou laissez en auto)", area_options, key="area_name")
 
-        # manual override
         if st.session_state.area_name in AREAS:
             st.session_state.detected_area = st.session_state.area_name
             st.session_state.area_locked = True
@@ -525,9 +521,7 @@ if st.session_state.step == 1:
             st.session_state.res = res
             st.session_state.step = 2
 
-            # ✅ THIS is what fixes the landing position
             request_scroll_to_step2_top()
-
             st.rerun()
 
     with colR:
@@ -551,18 +545,13 @@ if st.session_state.step == 1:
 # Step 2
 # ---------------------------
 if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
-    # ✅ Anchor that we scroll to
     st.markdown("<div id='step2-top-anchor'></div>", unsafe_allow_html=True)
 
     geo = st.session_state.geo
     res = st.session_state.res
     effective_area, ai = get_effective_area()
 
-    # Pour Clermont-de-l'Oise : ajoute quartier
-    if effective_area == "Clermont-de-l'Oise":
-        sector_display = f"{effective_area} — {res.get('quartier','')}"
-    else:
-        sector_display = effective_area
+    sector_display = f"{effective_area} — {res.get('quartier','')}" if effective_area == "Clermont-de-l'Oise" else effective_area
 
     st.markdown("## ✨ Votre estimation (fourchette immédiate)")
 
@@ -596,7 +585,6 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
         st.markdown("<div class='secondary-btn'>", unsafe_allow_html=True)
         if st.button("⬅️ Modifier les infos du bien", use_container_width=True):
             st.session_state.step = 1
-            # Remonte aussi au retour
             request_scroll_to_step2_top()
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)

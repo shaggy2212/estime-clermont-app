@@ -12,7 +12,6 @@ ACCENT = "#FF7E79"
 
 GARE_LON = 2.41767
 GARE_LAT = 49.38531
-
 DVF_API = "https://dvf.cquest.org/dvf"
 
 # -------------------------------------------------
@@ -20,19 +19,18 @@ DVF_API = "https://dvf.cquest.org/dvf"
 # -------------------------------------------------
 st.markdown(f"""
 <style>
-body {{ font-family: 'Poppins', sans-serif; }}
 h1, h2, h3 {{ color: {PRIMARY}; font-weight: 700; }}
-.metric-card {{
+.stButton > button {{
     background: linear-gradient(135deg, {ACCENT} 0%, #ff5b66 100%);
     color: white;
-    padding: 1rem;
-    border-radius: 14px;
+    font-weight: 800;
+    border-radius: 12px;
 }}
 </style>
 """, unsafe_allow_html=True)
 
 # -------------------------------------------------
-# Helpers
+# HELPERS
 # -------------------------------------------------
 def haversine_m(lat1, lon1, lat2, lon2):
     R = 6371000
@@ -53,11 +51,14 @@ def estimate_simple(surface, distance):
 # DVF FUNCTIONS
 # -------------------------------------------------
 def fetch_dvf_sales(lat, lon, radius):
-    params = {"lat": lat, "lon": lon, "dist": radius}
-    r = requests.get(DVF_API, params=params, timeout=15)
-    if r.status_code != 200:
+    try:
+        params = {"lat": lat, "lon": lon, "dist": radius}
+        r = requests.get(DVF_API, params=params, timeout=15)
+        if r.status_code != 200:
+            return []
+        return r.json()
+    except:
         return []
-    return r.json()
 
 def filter_comparables(data, bien_type, surface):
     df = pd.DataFrame(data)
@@ -75,6 +76,7 @@ def filter_comparables(data, bien_type, surface):
             (df["surface_reelle_bati"] <= surface * 1.25)]
 
     df["prix_m2"] = df["valeur_fonciere"] / df["surface_reelle_bati"]
+
     return df
 
 def clean_outliers(df):
@@ -87,6 +89,7 @@ def clean_outliers(df):
 def compute_dvf_estimation(df, surface):
     if df.empty:
         return None
+
     median = df["prix_m2"].median()
     prix = median * surface
 
@@ -107,7 +110,7 @@ def compute_dvf_estimation(df, surface):
     }
 
 # -------------------------------------------------
-# STATE
+# SESSION STATE
 # -------------------------------------------------
 if "step" not in st.session_state:
     st.session_state.step = 1
@@ -117,17 +120,18 @@ if "step" not in st.session_state:
 # -------------------------------------------------
 if st.session_state.step == 1:
 
-    st.title("🏠 Estimation Immobilière Locale")
+    st.title("🏠 Estimation Immobilière à Clermont et alentours")
 
     surface = st.number_input("Surface (m²)", min_value=20, max_value=400, value=100)
-    bien_type = st.selectbox("Type", ["Maison", "Appartement"])
+    bien_type = st.selectbox("Type de bien", ["Maison", "Appartement"])
 
+    # Coordonnées centre Clermont
     lat = 49.38531
     lon = 2.41767
 
     distance = haversine_m(lat, lon, GARE_LAT, GARE_LON)
 
-    if st.button("🚀 Obtenir ma fourchette"):
+    if st.button("🚀 Obtenir ma première estimation"):
         min_price, max_price = estimate_simple(surface, distance)
 
         st.session_state.simple_min = min_price
@@ -144,22 +148,27 @@ if st.session_state.step == 1:
 # -------------------------------------------------
 if st.session_state.step == 2:
 
-    st.header("✨ Première estimation")
+    st.header("✨ Première estimation instantanée")
 
     col1, col2 = st.columns(2)
-    col1.metric("Fourchette", f"{st.session_state.simple_min:,.0f} € - {st.session_state.simple_max:,.0f} €".replace(",", " "))
+    col1.metric("Fourchette estimative",
+                f"{st.session_state.simple_min:,.0f} € - {st.session_state.simple_max:,.0f} €".replace(",", " "))
     col2.metric("Méthode", "Algorithme local")
 
     st.divider()
 
     st.subheader("🔓 Débloquer l’estimation DVF (12 mois glissants)")
 
-    with st.form("contact"):
+    with st.form("contact_form"):
         email = st.text_input("Votre email")
         consent = st.checkbox("J’accepte d’être recontacté")
         submit = st.form_submit_button("Obtenir l’estimation affinée")
 
-    if submit and consent and email:
+    if submit:
+
+        if not email or not consent:
+            st.error("Merci de renseigner votre email et d’accepter le consentement.")
+            st.stop()
 
         progress = st.progress(0)
         status = st.empty()
@@ -172,20 +181,23 @@ if st.session_state.step == 2:
 
         if len(sales) < 5:
             status.text("📍 Extension du rayon de recherche…")
-            progress.progress(35)
+            progress.progress(40)
             sales = fetch_dvf_sales(st.session_state.lat, st.session_state.lon, 2000)
 
         status.text("🧹 Filtrage des biens similaires…")
-        progress.progress(55)
-        df = filter_comparables(sales, st.session_state.bien_type, st.session_state.surface)
+        progress.progress(60)
+        df = filter_comparables(sales,
+                                st.session_state.bien_type,
+                                st.session_state.surface)
 
         status.text("📊 Nettoyage statistique…")
-        progress.progress(75)
+        progress.progress(80)
         df = clean_outliers(df)
 
         status.text("🧠 Calcul de l’estimation affinée…")
         progress.progress(95)
-        result = compute_dvf_estimation(df, st.session_state.surface)
+        result = compute_dvf_estimation(df,
+                                        st.session_state.surface)
 
         progress.progress(100)
         time.sleep(0.5)
@@ -193,20 +205,25 @@ if st.session_state.step == 2:
         status.empty()
 
         if result:
+
             st.success(f"Basé sur {result['count']} ventes comparables")
 
             col1, col2 = st.columns(2)
-            col1.metric("Valeur affinée", f"{result['estimation']:,.0f} €".replace(",", " "))
-            col2.metric("Fourchette réaliste", 
+            col1.metric("Valeur affinée",
+                        f"{result['estimation']:,.0f} €".replace(",", " "))
+            col2.metric("Fourchette réaliste",
                         f"{result['min']:,.0f} € - {result['max']:,.0f} €".replace(",", " "))
 
-            st.subheader("🏘️ Exemples de biens comparables (localisation partielle)")
+            st.subheader("🏘️ Biens comparables (localisation partielle)")
+
             for _, row in df.head(5).iterrows():
                 st.markdown(
                     f"- {row['type_local']} | {int(row['surface_reelle_bati'])} m²  \n"
                     f"  Vente {row['date_mutation'].strftime('%m/%Y')}  \n"
-                    f"  ~{int(row.get('distance',0))} m  \n"
                     f"  {int(row['valeur_fonciere']):,} €".replace(",", " ")
                 )
+
+            st.info("📞 Les données DVF ne tiennent pas compte des travaux, prestations ou état réel. Je vous contacte pour affiner à ±3%.")
+
         else:
-            st.warning("Pas assez de ventes comparables récentes.")
+            st.warning("Pas assez de ventes comparables sur les 12 derniers mois.")

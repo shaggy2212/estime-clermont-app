@@ -1,7 +1,6 @@
 import streamlit as st
 import numpy as np
 import requests
-import streamlit.components.v1 as components
 from typing import Optional, Dict, Any, List, Tuple
 
 # ---------------------------
@@ -18,7 +17,7 @@ PRIMARY = "#004D7F"
 ACCENT = "#FF7E79"
 SOFT = "#EAF2FF"
 
-# Gare Clermont-de-l'Oise (POINT lon lat)
+# Gare Clermont-de-l'Oise (lon/lat)
 GARE_LON = 2.41767
 GARE_LAT = 49.38531
 
@@ -48,9 +47,9 @@ st.session_state.setdefault("geo", None)
 st.session_state.setdefault("res", None)
 
 # Step 1 inputs
-st.session_state.setdefault("area_name", AUTO_AREA)         # selectbox key
-st.session_state.setdefault("area_locked", False)           # internal lock
-st.session_state.setdefault("detected_area", DEFAULT_AREA)  # detected area used when AUTO
+st.session_state.setdefault("area_name", AUTO_AREA)          # selectbox key
+st.session_state.setdefault("area_locked", False)            # internal lock
+st.session_state.setdefault("detected_area", DEFAULT_AREA)   # detected area used when AUTO
 st.session_state.setdefault("bien_type", "Maison")
 st.session_state.setdefault("surface", 100.0)
 st.session_state.setdefault("etat", "Moyen")
@@ -68,7 +67,6 @@ st.session_state.setdefault("consent", False)
 
 # UI
 st.session_state.setdefault("show_explain", False)
-st.session_state.setdefault("scroll_to_step2_top", False)  # ✅
 
 # ---------------------------
 # CSS
@@ -78,6 +76,7 @@ st.markdown(
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
 * {{ font-family: 'Poppins', sans-serif !important; }}
+
 .main {{ background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%); }}
 
 h1 {{
@@ -86,7 +85,15 @@ h1 {{
     text-align: center !important;
     margin-bottom: 0.2rem !important;
 }}
-h2 {{ color: {PRIMARY} !important; font-weight: 750 !important; }}
+h2 {{
+    color: {PRIMARY} !important;
+    font-weight: 750 !important;
+}}
+/* ✅ Uniformise les titres h3 aussi (Localisation, etc.) */
+h3 {{
+    color: {PRIMARY} !important;
+    font-weight: 750 !important;
+}}
 
 .small-note {{ color:#4b5563; font-size:0.92rem; line-height:1.45; }}
 
@@ -154,46 +161,6 @@ hr {{ border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 1.3rem 0; }}
 )
 
 # ---------------------------
-# Reliable scroll injection (FIXED)
-# ---------------------------
-_scroll_slot = st.empty()
-
-def request_scroll_to_step2_top():
-    st.session_state.scroll_to_step2_top = True
-
-def do_scroll_to_step2_top_if_needed():
-    """
-    FIX: st.empty() returns a DeltaGenerator, which doesn't have ".components".
-    Use components.html directly (rendered at top via this call site).
-    """
-    if st.session_state.get("scroll_to_step2_top"):
-        with _scroll_slot:
-            components.html(
-                """
-                <script>
-                  (function(){
-                    function go(){
-                      const el = document.getElementById('step2-top-anchor');
-                      if (el && el.scrollIntoView) {
-                        el.scrollIntoView({block: 'start'});
-                      }
-                      window.scrollTo(0,0);
-                    }
-                    setTimeout(go, 30);
-                    setTimeout(go, 120);
-                    setTimeout(go, 300);
-                  })();
-                </script>
-                """,
-                height=0,
-            )
-        st.session_state.scroll_to_step2_top = False
-    else:
-        _scroll_slot.empty()
-
-do_scroll_to_step2_top_if_needed()
-
-# ---------------------------
 # Helpers
 # ---------------------------
 def haversine_m(lat1, lon1, lat2, lon2) -> float:
@@ -221,16 +188,18 @@ def normalize_query_to_area(q: str, city: str, postcode: str) -> str:
 
 
 def get_effective_area() -> Tuple[str, Dict[str, str]]:
+    # manuel
     if st.session_state.area_name in AREAS:
         a = st.session_state.area_name
         return a, AREAS[a]
+    # auto
     detected = st.session_state.get("detected_area")
     if detected in AREAS:
         return detected, AREAS[detected]
     return DEFAULT_AREA, AREAS[DEFAULT_AREA]
 
 
-@st.cache_data(ttl=60 * 60)
+@st.cache_data(ttl=60 * 60, show_spinner=False)
 def geopf_completion(text: str, postcode: str, city: str, max_resp: int = 7) -> List[str]:
     if not text or len(text.strip()) < 3:
         return []
@@ -256,6 +225,8 @@ def geopf_completion(text: str, postcode: str, city: str, max_resp: int = 7) -> 
         if city and norm(city) not in norm(label):
             continue
         out.append(label)
+
+    # dedup
     seen = set()
     dedup = []
     for lab in out:
@@ -265,7 +236,7 @@ def geopf_completion(text: str, postcode: str, city: str, max_resp: int = 7) -> 
     return dedup
 
 
-@st.cache_data(ttl=24 * 60 * 60)
+@st.cache_data(ttl=24 * 60 * 60, show_spinner=False)
 def geopf_geocode_one(query: str) -> Optional[Dict[str, Any]]:
     if not query:
         return None
@@ -287,6 +258,7 @@ def geopf_geocode_one(query: str) -> Optional[Dict[str, Any]]:
 
 
 def quartier_from_distance(distance_m: float) -> str:
+    # (temp) : par distance gare
     if distance_m < 500:
         return "Nord (Gare)"
     if distance_m < 1500:
@@ -299,6 +271,7 @@ def quartier_from_distance(distance_m: float) -> str:
 
 
 def base_prix_m2(quartier: str, bien_type: str) -> float:
+    # (temp) : table interne
     table = {
         "Centre-ville": {"Maison": 2100, "Appartement": 2500},
         "Nord (Gare)": {"Maison": 1950, "Appartement": 2200},
@@ -391,6 +364,7 @@ if st.session_state.step == 1:
         area_options = [AUTO_AREA] + list(AREAS.keys())
         st.selectbox("Choisissez la commune (ou laissez en auto)", area_options, key="area_name")
 
+        # manuel override
         if st.session_state.area_name in AREAS:
             st.session_state.detected_area = st.session_state.area_name
             st.session_state.area_locked = True
@@ -418,30 +392,47 @@ if st.session_state.step == 1:
                 unsafe_allow_html=True,
             )
 
-        st.markdown("### 🧭 Localisation")
+        # ✅ Uniformisation du titre Localisation (même niveau)
+        st.markdown("## 🧭 Localisation")
         st.text_input("Commencez à taper l’adresse", placeholder="Ex : 5 Rue du Chemin Blanc", key="addr_typed")
         st.markdown(
             "<div class='small-note'>Plus l’adresse est précise (numéro + rue), plus le résultat est fiable.</div>",
             unsafe_allow_html=True,
         )
 
-        typed = st.session_state.addr_typed
+        typed = st.session_state.addr_typed.strip()
+        addr_status = st.empty()
 
         suggestions_display: List[str] = []
+
+        # ✅ Message clair au lieu de spinners cache
+        if len(typed) >= 3:
+            addr_status.markdown("<div class='small-note'>🔎 Recherche en cours…</div>", unsafe_allow_html=True)
+        else:
+            addr_status.markdown("<div class='small-note'>Tapez au moins 3 caractères pour voir des suggestions.</div>", unsafe_allow_html=True)
+
         if st.session_state.area_name == AUTO_AREA:
-            for area_name, info in AREAS.items():
+            if len(typed) >= 3:
+                # Mode auto: agrège suggestions de toutes les communes (avec préfixe)
+                for area_name, info in AREAS.items():
+                    try:
+                        labs = geopf_completion(typed, postcode=info["postcode"], city=info["city"], max_resp=5)
+                    except Exception:
+                        labs = []
+                    for lab in labs:
+                        suggestions_display.append(f"{area_name} — {lab}")
+        else:
+            if len(typed) >= 3:
+                # Mode manuel
                 try:
-                    labs = geopf_completion(typed, postcode=info["postcode"], city=info["city"], max_resp=5)
+                    labs = geopf_completion(typed, postcode=ai["postcode"], city=ai["city"])
                 except Exception:
                     labs = []
-                for lab in labs:
-                    suggestions_display.append(f"{area_name} — {lab}")
-        else:
-            try:
-                labs = geopf_completion(typed, postcode=ai["postcode"], city=ai["city"])
-            except Exception:
-                labs = []
-            suggestions_display = labs[:]
+                suggestions_display = labs[:]
+
+        # fin "recherche"
+        if len(typed) >= 3:
+            addr_status.empty()
 
         if suggestions_display:
             prev_display = st.session_state.get("addr_choice_display", "")
@@ -454,8 +445,8 @@ if st.session_state.step == 1:
                 on_change=on_addr_choice_display_change,
             )
         else:
-            st.session_state.addr_choice = (typed or "").strip()
-            st.session_state.addr_choice_display = st.session_state.addr_choice
+            st.session_state.addr_choice = typed
+            st.session_state.addr_choice_display = typed
 
         if st.session_state.area_name == AUTO_AREA:
             detected = st.session_state.get("detected_area")
@@ -463,11 +454,6 @@ if st.session_state.step == 1:
                 inf = AREAS[detected]
                 st.markdown(
                     f"<div class='card soft'><b>Commune détectée :</b> {detected} — <b>CP :</b> {inf['postcode']}</div>",
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.markdown(
-                    "<p class='small-note'>Astuce : choisissez une suggestion (préfixée par la commune) pour détecter automatiquement.</p>",
                     unsafe_allow_html=True,
                 )
 
@@ -520,8 +506,6 @@ if st.session_state.step == 1:
             st.session_state.geo = geo
             st.session_state.res = res
             st.session_state.step = 2
-
-            request_scroll_to_step2_top()
             st.rerun()
 
     with colR:
@@ -545,13 +529,19 @@ if st.session_state.step == 1:
 # Step 2
 # ---------------------------
 if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
-    st.markdown("<div id='step2-top-anchor'></div>", unsafe_allow_html=True)
+    # ✅ Anti “atterrissage trop bas” : on crée du “top padding” pour que,
+    # même si Streamlit conserve la position, on tombe visuellement sur les vignettes.
+    st.markdown("<div style='height:260px'></div>", unsafe_allow_html=True)
 
     geo = st.session_state.geo
     res = st.session_state.res
     effective_area, ai = get_effective_area()
 
-    sector_display = f"{effective_area} — {res.get('quartier','')}" if effective_area == "Clermont-de-l'Oise" else effective_area
+    # Pour Clermont-de-l'Oise : ajoute quartier
+    if effective_area == "Clermont-de-l'Oise":
+        sector_display = f"{effective_area} — {res.get('quartier','')}"
+    else:
+        sector_display = effective_area
 
     st.markdown("## ✨ Votre estimation (fourchette immédiate)")
 
@@ -585,7 +575,6 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
         st.markdown("<div class='secondary-btn'>", unsafe_allow_html=True)
         if st.button("⬅️ Modifier les infos du bien", use_container_width=True):
             st.session_state.step = 1
-            request_scroll_to_step2_top()
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -613,7 +602,10 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
         st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("<hr/>", unsafe_allow_html=True)
+
+    # ✅ Formulaire clairement sous les résultats, dans une card
     st.markdown("## 📩 Recevoir le détail (comparables + explication)")
+    st.markdown("<div class='card accent-top'>", unsafe_allow_html=True)
 
     with st.form("contact_form", clear_on_submit=False):
         c1, c2 = st.columns(2)
@@ -625,6 +617,8 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
             st.checkbox("J’accepte d’être recontacté au sujet de cette estimation (sans spam).", key="consent")
 
         submitted = st.form_submit_button("✅ Envoyer le détail + être rappelé", use_container_width=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
     if submitted:
         if not (st.session_state.prenom and st.session_state.email and st.session_state.telephone and st.session_state.consent):

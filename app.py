@@ -394,8 +394,8 @@ def dvf_select_similaires(
     if pd.isna(max_date):
         return pd.DataFrame(), 0
 
-    cutoff = max_date - pd.Timedelta(days=365)
-       df = df_all[df_all["date_mutation"] >= cutoff].copy()
+   cutoff = max_date - pd.Timedelta(days=365)
+   df = df_all[df_all["date_mutation"] >= cutoff].copy()
     if df.empty:
         return pd.DataFrame(), 0
 

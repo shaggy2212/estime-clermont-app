@@ -1,9 +1,9 @@
 import streamlit as st
 import numpy as np
-import requests
 import pandas as pd
-import datetime
-import time
+import requests
+from datetime import datetime
+from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 
 # ---------------------------
@@ -24,18 +24,15 @@ SOFT = "#EAF2FF"
 GARE_LON = 2.41767
 GARE_LAT = 49.38531
 
-# DVF (cquest)
-DVF_API = "https://dvf.cquest.org/dvf"
-
 # Périmètre (communes autorisées)
 AREAS: Dict[str, Dict[str, str]] = {
-    "Clermont-de-l'Oise": {"city": "Clermont", "postcode": "60600"},
-    "Breuil-le-Vert": {"city": "Breuil-le-Vert", "postcode": "60600"},
-    "Agnetz": {"city": "Agnetz", "postcode": "60600"},
-    "Fitz-James": {"city": "Fitz-James", "postcode": "60600"},
-    "Breuil-le-Sec": {"city": "Breuil-le-Sec", "postcode": "60840"},
-    "Neuilly-sous-Clermont": {"city": "Neuilly-sous-Clermont", "postcode": "60290"},
-    "Bailleval": {"city": "Bailleval", "postcode": "60140"},
+    "Clermont-de-l'Oise": {"city": "Clermont", "postcode": "60600", "insee": "60157"},
+    "Breuil-le-Vert": {"city": "Breuil-le-Vert", "postcode": "60600", "insee": "60107"},
+    "Agnetz": {"city": "Agnetz", "postcode": "60600", "insee": "60007"},
+    "Fitz-James": {"city": "Fitz-James", "postcode": "60600", "insee": "60234"},
+    "Breuil-le-Sec": {"city": "Breuil-le-Sec", "postcode": "60840", "insee": "60106"},
+    "Neuilly-sous-Clermont": {"city": "Neuilly-sous-Clermont", "postcode": "60290", "insee": "60451"},
+    "Bailleval": {"city": "Bailleval", "postcode": "60140", "insee": "60042"},
 }
 
 AUTO_AREA = "🔎 Détection automatique"
@@ -44,6 +41,9 @@ DEFAULT_AREA = "Clermont-de-l'Oise"
 # Géoplateforme (IGN)
 GEOPF_COMPLETION_URL = "https://data.geopf.fr/geocodage/completion/"
 GEOPF_SEARCH_URL = "https://data.geopf.fr/geocodage/search"
+
+# DVF local (généré par build_dvf_local.py)
+DVF_LOCAL_PATH = Path("data/dvf_local.parquet")
 
 # ---------------------------
 # Session state
@@ -74,9 +74,9 @@ st.session_state.setdefault("consent", False)
 # UI
 st.session_state.setdefault("show_explain", False)
 
-# DVF UI state
-st.session_state.setdefault("dvf_result", None)
-st.session_state.setdefault("dvf_comps", None)
+# Hybrid / DVF result storage
+st.session_state.setdefault("hybrid_done", False)
+st.session_state.setdefault("hybrid_payload", None)
 
 # ---------------------------
 # CSS
@@ -181,10 +181,8 @@ def haversine_m(lat1, lon1, lat2, lon2) -> float:
     a = np.sin(dphi / 2) ** 2 + np.cos(phi1) * np.cos(phi2) * np.sin(dl / 2) ** 2
     return float(2 * R * np.arctan2(np.sqrt(a), np.sqrt(1 - a)))
 
-
 def norm(s: str) -> str:
     return (s or "").strip().lower().replace("’", "'")
-
 
 def normalize_query_to_area(q: str, city: str, postcode: str) -> str:
     q = (q or "").strip()
@@ -195,9 +193,8 @@ def normalize_query_to_area(q: str, city: str, postcode: str) -> str:
         q = f"{q}, {postcode} {city}, Oise, France"
     return q
 
-
 def get_effective_area() -> Tuple[str, Dict[str, str]]:
-    # manuel
+    # manual
     if st.session_state.area_name in AREAS:
         a = st.session_state.area_name
         return a, AREAS[a]
@@ -206,61 +203,6 @@ def get_effective_area() -> Tuple[str, Dict[str, str]]:
     if detected in AREAS:
         return detected, AREAS[detected]
     return DEFAULT_AREA, AREAS[DEFAULT_AREA]
-
-
-def safe_float(x) -> Optional[float]:
-    if x is None:
-        return None
-    if isinstance(x, (int, float, np.floating)):
-        return float(x)
-    # si déjà une string "231 000 €", on tente de nettoyer
-    if isinstance(x, str):
-        s = x.replace("€", "").replace("\u202f", " ").replace(" ", "").replace(",", ".").strip()
-        try:
-            return float(s)
-        except Exception:
-            return None
-    return None
-
-
-def eur(x) -> str:
-    """
-    ✅ Robuste:
-    - si x est déjà une string, on la renvoie
-    - si x est None ou non convertible, on affiche —
-    - sinon on formate
-    """
-    if x is None:
-        return "—"
-    if isinstance(x, str):
-        return x
-    fx = safe_float(x)
-    if fx is None:
-        return "—"
-    return f"{fx:,.0f} €".replace(",", " ")
-
-
-def parse_display_choice(display_value: str) -> Tuple[Optional[str], str]:
-    s = (display_value or "").strip()
-    for sep in [" — ", "—", " - ", "-"]:
-        if sep in s:
-            a, lab = s.split(sep, 1)
-            a = a.strip()
-            lab = lab.strip()
-            if a in AREAS:
-                return a, lab
-            return None, lab
-    return None, s
-
-
-def on_addr_choice_display_change():
-    display_val = st.session_state.get("addr_choice_display", "")
-    area, label = parse_display_choice(display_val)
-    st.session_state.addr_choice = label
-    if area:
-        st.session_state.detected_area = area
-        st.session_state.area_locked = True
-
 
 @st.cache_data(ttl=60 * 60, show_spinner=False)
 def geopf_completion(text: str, postcode: str, city: str, max_resp: int = 7) -> List[str]:
@@ -289,6 +231,7 @@ def geopf_completion(text: str, postcode: str, city: str, max_resp: int = 7) -> 
             continue
         out.append(label)
 
+    # dedup
     seen = set()
     dedup = []
     for lab in out:
@@ -296,7 +239,6 @@ def geopf_completion(text: str, postcode: str, city: str, max_resp: int = 7) -> 
             dedup.append(lab)
             seen.add(lab)
     return dedup
-
 
 @st.cache_data(ttl=24 * 60 * 60, show_spinner=False)
 def geopf_geocode_one(query: str) -> Optional[Dict[str, Any]]:
@@ -318,8 +260,8 @@ def geopf_geocode_one(query: str) -> Optional[Dict[str, Any]]:
     lon, lat = float(coords[0]), float(coords[1])
     return {"lat": lat, "lon": lon, "label": props.get("label") or query}
 
-
 def quartier_from_distance(distance_m: float) -> str:
+    # (temp) : par distance gare
     if distance_m < 500:
         return "Nord (Gare)"
     if distance_m < 1500:
@@ -330,8 +272,8 @@ def quartier_from_distance(distance_m: float) -> str:
         return "Est (Pavillons)"
     return "Ouest (Neuf)"
 
-
 def base_prix_m2(quartier: str, bien_type: str) -> float:
+    # (temp) : table interne
     table = {
         "Centre-ville": {"Maison": 2100, "Appartement": 2500},
         "Nord (Gare)": {"Maison": 1950, "Appartement": 2200},
@@ -341,24 +283,30 @@ def base_prix_m2(quartier: str, bien_type: str) -> float:
     }
     return float(table[quartier][bien_type])
 
-
-def estimate_price(bien_type: str, surface: float, nb_pieces: int, nb_chambres: int, etat: str, distance_m: float) -> Dict[str, Any]:
+def estimate_price(
+    bien_type: str,
+    surface: float,
+    nb_pieces: int,
+    nb_chambres: int,
+    etat: str,
+    distance_m: float
+) -> Dict[str, Any]:
     quartier = quartier_from_distance(distance_m)
     prix_m2 = base_prix_m2(quartier, bien_type)
 
     facteur_pieces = 1 + (nb_pieces - 3) * 0.03
-    facteur_etat = {"À rénover": 0.85, "Moyen": 1.0, "Bon": 1.06, "Rénové": 1.12}[etat]
     facteur_chambres = 1 + (nb_chambres - 2) * 0.05
+    facteur_etat = {"À rénover": 0.85, "Moyen": 1.0, "Bon": 1.06, "Rénové": 1.12}[etat]
     facteur_gare = 1 + min(0.08, 0.5 / (1 + distance_m / 1000))
 
-    prix_total = prix_m2 * surface * facteur_pieces * facteur_etat * facteur_chambres * facteur_gare
+    prix_total = prix_m2 * surface * facteur_pieces * facteur_chambres * facteur_etat * facteur_gare
     return {
         "quartier": quartier,
         "distance_gare_m": int(round(distance_m)),
-        "prix_m2": prix_m2 * facteur_pieces * facteur_etat * facteur_chambres * facteur_gare,
+        "prix_m2": prix_m2 * facteur_pieces * facteur_chambres * facteur_etat * facteur_gare,
         "prix_total": prix_total,
-        "min": float(prix_total * 0.93),
-        "max": float(prix_total * 1.07),
+        "min": prix_total * 0.93,
+        "max": prix_total * 1.07,
         "explain": {
             "Base €/m²": round(prix_m2, 0),
             "Impact pièces": f"{(facteur_pieces - 1) * 100:+.1f}%",
@@ -368,79 +316,83 @@ def estimate_price(bien_type: str, surface: float, nb_pieces: int, nb_chambres: 
         },
     }
 
+def eur(x: float) -> str:
+    return f"{x:,.0f} €".replace(",", " ")
+
+def parse_display_choice(display_value: str) -> Tuple[Optional[str], str]:
+    s = (display_value or "").strip()
+    for sep in [" — ", "—", " - ", "-"]:
+        if sep in s:
+            a, lab = s.split(sep, 1)
+            a = a.strip()
+            lab = lab.strip()
+            if a in AREAS:
+                return a, lab
+            return None, lab
+    return None, s
+
+def on_addr_choice_display_change():
+    display_val = st.session_state.get("addr_choice_display", "")
+    area, label = parse_display_choice(display_val)
+    st.session_state.addr_choice = label
+    if area:
+        st.session_state.detected_area = area
+        st.session_state.area_locked = True
+
 # ---------------------------
-# DVF helpers
+# DVF local
 # ---------------------------
-@st.cache_data(ttl=3600, show_spinner=False)
-def fetch_dvf_sales(lat: float, lon: float, radius_m: int):
-    try:
-        r = requests.get(DVF_API, params={"lat": lat, "lon": lon, "dist": radius_m}, timeout=20)
-        if r.status_code != 200:
-            return []
-        return r.json()
-    except Exception:
-        return []
+@st.cache_data(ttl=6 * 60 * 60, show_spinner=False)
+def load_dvf_local() -> pd.DataFrame:
+    if not DVF_LOCAL_PATH.exists():
+        return pd.DataFrame()
+    df = pd.read_parquet(DVF_LOCAL_PATH)
 
-def filter_dvf_comparables(raw: list, bien_type: str, surface: float) -> pd.DataFrame:
-    df = pd.DataFrame(raw)
-    if df.empty:
-        return df
-
-    # garde colonnes utiles si présentes
-    # date_mutation, type_local, surface_reelle_bati, valeur_fonciere
-    for col in ["date_mutation", "type_local", "surface_reelle_bati", "valeur_fonciere"]:
-        if col not in df.columns:
-            return pd.DataFrame()
-
+    # normalize types
     df["date_mutation"] = pd.to_datetime(df["date_mutation"], errors="coerce")
-    df = df.dropna(subset=["date_mutation", "surface_reelle_bati", "valeur_fonciere", "type_local"])
+    df["valeur_fonciere"] = pd.to_numeric(df["valeur_fonciere"], errors="coerce")
+    df["surface_reelle_bati"] = pd.to_numeric(df["surface_reelle_bati"], errors="coerce")
+    df["longitude"] = pd.to_numeric(df["longitude"], errors="coerce")
+    df["latitude"] = pd.to_numeric(df["latitude"], errors="coerce")
 
-    one_year_ago = datetime.datetime.now() - datetime.timedelta(days=365)
-    df = df[df["date_mutation"] >= one_year_ago]
-
-    # type
-    df = df[df["type_local"] == bien_type]
-
-    # surface +/- 25%
-    df = df[(df["surface_reelle_bati"] >= surface * 0.75) & (df["surface_reelle_bati"] <= surface * 1.25)]
-
-    # €/m²
-    df = df[df["surface_reelle_bati"] > 0]
-    df["prix_m2"] = df["valeur_fonciere"] / df["surface_reelle_bati"]
-    df = df.replace([np.inf, -np.inf], np.nan).dropna(subset=["prix_m2"])
-
+    df = df.dropna(subset=["date_mutation", "valeur_fonciere", "surface_reelle_bati", "longitude", "latitude", "type_local"])
+    df = df[df["type_local"].isin(["Maison", "Appartement"])]
     return df
 
-def clean_outliers(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty or len(df) < 5:
-        return df
-    low = df["prix_m2"].quantile(0.10)
-    high = df["prix_m2"].quantile(0.90)
-    return df[(df["prix_m2"] >= low) & (df["prix_m2"] <= high)]
-
-def compute_dvf_estimation(df: pd.DataFrame, surface: float) -> Optional[Dict[str, Any]]:
+def dvf_select_similaires(
+    df_all: pd.DataFrame,
+    lat: float,
+    lon: float,
+    bien_type: str,
+    surface: float
+) -> pd.DataFrame:
+    # 12 mois glissants
+    cutoff = pd.Timestamp.now(tz=None) - pd.Timedelta(days=365)
+    df = df_all[df_all["date_mutation"] >= cutoff].copy()
     if df.empty:
-        return None
+        return df
 
-    median_m2 = float(df["prix_m2"].median())
-    prix = float(median_m2 * surface)
+    # distance
+    df["distance_m"] = df.apply(lambda r: haversine_m(lat, lon, r["latitude"], r["longitude"]), axis=1)
 
-    n = int(len(df))
-    if n > 10:
-        marge = 0.05
-    elif n >= 5:
-        marge = 0.07
-    else:
-        marge = 0.10
+    # rayon progressif
+    df1 = df[df["distance_m"] <= 1000].copy()
+    if len(df1) < 5:
+        df1 = df[df["distance_m"] <= 2000].copy()
+    if len(df1) < 5:
+        df1 = df[df["distance_m"] <= 3000].copy()
 
-    return {
-        "count": n,
-        "median_m2": median_m2,
-        "estimation": prix,
-        "min": prix * (1 - marge),
-        "max": prix * (1 + marge),
-        "margin": marge,
-    }
+    # filtre type + surface
+    df1 = df1[df1["type_local"] == bien_type].copy()
+    if df1.empty:
+        return df1
+
+    df1 = df1[
+        (df1["surface_reelle_bati"] >= surface * 0.75) &
+        (df1["surface_reelle_bati"] <= surface * 1.25)
+    ].copy()
+
+    return df1
 
 # ---------------------------
 # Header
@@ -455,7 +407,7 @@ st.markdown(
 )
 st.markdown(
     "<div class='card accent-top'><b>Objectif :</b> vous donner une <b>fourchette crédible</b> en 30 secondes, "
-    "puis affiner avec des ventes comparables et les spécificités de votre bien.</div>",
+    "puis affiner avec des ventes comparables (DVF) et les spécificités du bien.</div>",
     unsafe_allow_html=True,
 )
 st.markdown("<hr/>", unsafe_allow_html=True)
@@ -471,7 +423,7 @@ if st.session_state.step == 1:
         area_options = [AUTO_AREA] + list(AREAS.keys())
         st.selectbox("Choisissez la commune (ou laissez en auto)", area_options, key="area_name")
 
-        # manuel override
+        # manual override
         if st.session_state.area_name in AREAS:
             st.session_state.detected_area = st.session_state.area_name
             st.session_state.area_locked = True
@@ -508,6 +460,7 @@ if st.session_state.step == 1:
 
         typed = st.session_state.addr_typed.strip()
         addr_status = st.empty()
+
         suggestions_display: List[str] = []
 
         if len(typed) >= 3:
@@ -559,10 +512,6 @@ if st.session_state.step == 1:
                 )
 
         if st.button("🚀 Obtenir ma fourchette (sans engagement)", use_container_width=True):
-            # reset DVF results on new estimation
-            st.session_state.dvf_result = None
-            st.session_state.dvf_comps = None
-
             if st.session_state.area_name == AUTO_AREA:
                 detected_area, detected_label = parse_display_choice(st.session_state.get("addr_choice_display", ""))
                 if detected_area:
@@ -611,6 +560,8 @@ if st.session_state.step == 1:
             st.session_state.geo = geo
             st.session_state.res = res
             st.session_state.step = 2
+            st.session_state.hybrid_done = False
+            st.session_state.hybrid_payload = None
             st.rerun()
 
     with colR:
@@ -620,13 +571,13 @@ if st.session_state.step == 1:
             "✅ Adresse filtrée sur la commune (auto ou manuel)<br/>"
             "✅ Distance à la gare calculée automatiquement<br/>"
             "✅ Fourchette immédiate<br/>"
-            "✅ Détails & comparables contre vos coordonnées"
+            "✅ Estimation hybride (DVF + critères) après email"
             "</div>",
             unsafe_allow_html=True,
         )
         st.markdown(
             "<div class='card soft'><b>Note :</b> l’estimation est indicative. L’affinage final se fait après vérification "
-            "(état réel, travaux, terrain, nuisances, exposition, prestations) — et les comparables DVF.</div>",
+            "(état réel, travaux, terrain, nuisances, exposition, prestations) — et comparables DVF.</div>",
             unsafe_allow_html=True,
         )
 
@@ -634,28 +585,25 @@ if st.session_state.step == 1:
 # Step 2
 # ---------------------------
 if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
-    st.markdown("<div style='height:260px'></div>", unsafe_allow_html=True)
+    # anti “atterrissage trop bas”
+    st.markdown("<div style='height:220px'></div>", unsafe_allow_html=True)
 
     geo = st.session_state.geo
     res = st.session_state.res
     effective_area, ai = get_effective_area()
 
-    # Pour Clermont-de-l'Oise : ajoute quartier
+    # Pour Clermont : ajoute quartier
     if effective_area == "Clermont-de-l'Oise":
         sector_display = f"{effective_area} — {res.get('quartier','')}"
     else:
         sector_display = effective_area
-
-    # ✅ sécurise min/max (évite ton TypeError)
-    res_min = safe_float(res.get("min"))
-    res_max = safe_float(res.get("max"))
 
     st.markdown("## ✨ Votre estimation (fourchette immédiate)")
 
     m1, m2, m3 = st.columns(3, gap="medium")
     with m1:
         st.markdown(
-            f"<div class='metric'><p class='k'>Fourchette</p><p class='v'>{eur(res_min)} – {eur(res_max)}</p></div>",
+            f"<div class='metric'><p class='k'>Fourchette</p><p class='v'>{eur(res['min'])} – {eur(res['max'])}</p></div>",
             unsafe_allow_html=True,
         )
     with m2:
@@ -671,7 +619,7 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
 
     st.markdown(
         f"<div class='card soft'><b>Adresse géocodée :</b> {geo.get('label','')}<br/>"
-        f"<b>Prix/m² indicatif (après facteurs) :</b> {eur(res.get('prix_m2'))} / m²</div>",
+        f"<b>Prix/m² indicatif (après facteurs) :</b> {eur(res['prix_m2'])} / m²</div>",
         unsafe_allow_html=True,
     )
 
@@ -710,8 +658,10 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
 
     st.markdown("<hr/>", unsafe_allow_html=True)
 
-    # ✅ Formulaire contact
-    st.markdown("## 📩 Recevoir le détail (comparables + explication)")
+    # ---------------------------
+    # Contact form (Step 2)
+    # ---------------------------
+    st.markdown("## 📩 Débloquer l’estimation hybride (DVF + critères)")
     st.markdown("<div class='card accent-top'>", unsafe_allow_html=True)
 
     with st.form("contact_form", clear_on_submit=False):
@@ -723,122 +673,195 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
             st.text_input("Votre téléphone", key="telephone")
             st.checkbox("J’accepte d’être recontacté au sujet de cette estimation (sans spam).", key="consent")
 
-        submitted = st.form_submit_button("✅ Envoyer le détail + être rappelé", use_container_width=True)
+        submitted = st.form_submit_button("✅ Obtenir l’estimation hybride", use_container_width=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # ✅ Si déjà calculé DVF dans une exécution précédente (rerun), on réaffiche
-    if st.session_state.dvf_result:
-        dvf = st.session_state.dvf_result
-        comps_df = st.session_state.dvf_comps
+    # ---------------------------
+    # On submit: compute DVF similars + hybrid
+    # ---------------------------
+    if submitted:
+        if not (st.session_state.prenom and st.session_state.email and st.session_state.telephone and st.session_state.consent):
+            st.error("Il manque une info (ou le consentement).")
+        else:
+            # Save lead payload for later integrations (ConvertKit, sheet, etc.)
+            st.session_state["lead"] = {
+                "secteur_effectif": effective_area,
+                "secteur_affiche": sector_display,
+                "code_postal": ai.get("postcode", ""),
+                "ville_api": ai.get("city", ""),
+                "prenom": st.session_state.prenom,
+                "email": st.session_state.email,
+                "telephone": st.session_state.telephone,
+                "adresse": geo.get("label", st.session_state.addr_choice),
+                "lat": geo["lat"],
+                "lon": geo["lon"],
+                "bien_type": st.session_state.bien_type,
+                "surface": float(st.session_state.surface),
+                "pieces": int(st.session_state.nb_pieces),
+                "chambres": int(st.session_state.nb_chambres),
+                "etat": st.session_state.etat,
+                "distance_gare_m": res["distance_gare_m"],
+                "quartier": res.get("quartier", ""),
+                "estimation_min_algo": float(res["min"]),
+                "estimation_max_algo": float(res["max"]),
+            }
+
+            # Progress bar UX
+            progress = st.progress(0, text="🔎 Recherche des ventes comparables (12 mois)…")
+
+            try:
+                progress.progress(15, text="📦 Chargement de la base DVF locale…")
+                df_all = load_dvf_local()
+
+                if df_all.empty:
+                    progress.empty()
+                    st.warning("⚠️ Base DVF locale introuvable (fichier parquet manquant).")
+                    st.stop()
+
+                progress.progress(40, text="🧠 Sélection des biens similaires…")
+                df_local = dvf_select_similaires(
+                    df_all=df_all,
+                    lat=float(geo["lat"]),
+                    lon=float(geo["lon"]),
+                    bien_type=st.session_state.bien_type,
+                    surface=float(st.session_state.surface),
+                )
+
+                progress.progress(65, text="📊 Calcul de l’estimation hybride…")
+
+                # Hybrid block needs at least 2 comparables; below => lower confidence with wider range
+                if df_local.empty:
+                    nb_similaires = 0
+                    estimation_dvf = None
+                else:
+                    df_local["prix_m2"] = df_local["valeur_fonciere"] / df_local["surface_reelle_bati"]
+                    df_local = df_local.replace([np.inf, -np.inf], np.nan).dropna(subset=["prix_m2"])
+                    nb_similaires = len(df_local)
+                    estimation_dvf = float(df_local["prix_m2"].median()) * float(st.session_state.surface)
+
+                # ----------------------------
+                # HYBRID DYNAMIC BLOCK
+                # ----------------------------
+                estimation_algo_centrale = (res["min"] + res["max"]) / 2
+
+                if nb_similaires > 15:
+                    fiabilite_label = "🟢 Très élevée"
+                    poids_dvf = 0.75
+                    marge = 0.04
+                elif nb_similaires >= 8:
+                    fiabilite_label = "🟢 Élevée"
+                    poids_dvf = 0.70
+                    marge = 0.05
+                elif nb_similaires >= 4:
+                    fiabilite_label = "🟡 Bonne"
+                    poids_dvf = 0.60
+                    marge = 0.06
+                elif nb_similaires >= 2:
+                    fiabilite_label = "🟠 Modérée"
+                    poids_dvf = 0.50
+                    marge = 0.08
+                else:
+                    fiabilite_label = "🔴 Faible"
+                    poids_dvf = 0.40
+                    marge = 0.10
+
+                # If no DVF estimate available, fallback to algo central with wide range
+                if estimation_dvf is None:
+                    estimation_finale = float(estimation_algo_centrale)
+                else:
+                    estimation_finale = (
+                        (poids_dvf * float(estimation_dvf)) +
+                        ((1 - poids_dvf) * float(estimation_algo_centrale))
+                    )
+
+                fourchette_min = estimation_finale * (1 - marge)
+                fourchette_max = estimation_finale * (1 + marge)
+
+                last_update = df_all["date_mutation"].max().strftime("%B %Y")
+
+                # store for rendering after rerun
+                st.session_state.hybrid_payload = {
+                    "fiabilite_label": fiabilite_label,
+                    "nb_similaires": int(nb_similaires),
+                    "poids_dvf": float(poids_dvf),
+                    "marge": float(marge),
+                    "estimation_finale": float(estimation_finale),
+                    "fourchette_min": float(fourchette_min),
+                    "fourchette_max": float(fourchette_max),
+                    "last_update": last_update,
+                    "similaires_preview": (
+                        df_local.sort_values("date_mutation", ascending=False).head(5)[
+                            ["type_local", "surface_reelle_bati", "valeur_fonciere", "date_mutation", "nom_commune", "distance_m"]
+                        ].to_dict("records")
+                        if nb_similaires > 0 else []
+                    ),
+                }
+                st.session_state.hybrid_done = True
+
+                progress.progress(100, text="✅ Terminé.")
+            finally:
+                progress.empty()
+
+            st.success(f"Merci {st.session_state.prenom} ✅ Je te contacte rapidement pour affiner et te donner des comparables précis.")
+            st.rerun()
+
+    # ---------------------------
+    # Render hybrid result after submit
+    # ---------------------------
+    if st.session_state.hybrid_done and st.session_state.hybrid_payload:
+        hp = st.session_state.hybrid_payload
 
         st.markdown("<hr/>", unsafe_allow_html=True)
-        st.markdown("## 🔓 Estimation affinée DVF (12 mois glissants)")
 
-        d1, d2 = st.columns(2, gap="medium")
-        with d1:
-            st.markdown(
-                f"<div class='metric'><p class='k'>Valeur affinée</p><p class='v'>{eur(dvf['estimation'])}</p></div>",
-                unsafe_allow_html=True,
-            )
-        with d2:
-            st.markdown(
-                f"<div class='metric'><p class='k'>Fourchette réaliste</p><p class='v'>{eur(dvf['min'])} – {eur(dvf['max'])}</p></div>",
-                unsafe_allow_html=True,
-            )
+        st.markdown("## 💎 Fourchette de valeur optimisée")
 
         st.markdown(
-            f"<div class='card soft'><b>Basé sur :</b> {dvf['count']} ventes comparables (rayon local, 12 mois glissants). "
-            f"<br/><b>Prix/m² médian :</b> {eur(dvf['median_m2'])} / m²</div>",
+            f"<div class='metric'><p class='k'>Valeur estimée</p>"
+            f"<p class='v'>{eur(hp['fourchette_min'])} – {eur(hp['fourchette_max'])}</p></div>",
             unsafe_allow_html=True,
         )
 
-        if comps_df is not None and not comps_df.empty:
-            st.markdown("### 🏘️ Exemples de comparables (localisation volontairement vague)")
-            for _, row in comps_df.head(6).iterrows():
-                st.markdown(
-                    f"- {row['type_local']} | {int(row['surface_reelle_bati'])} m² — {eur(row['valeur_fonciere'])}  \n"
-                    f"  Vente {pd.to_datetime(row['date_mutation']).strftime('%m/%Y')} — ~secteur {effective_area}"
-                )
+        st.markdown(
+            f"<div class='card soft'>"
+            f"<b>Indice de fiabilité :</b> {hp['fiabilite_label']}<br>"
+            f"Basé sur {hp['nb_similaires']} biens comparables récents<br><br>"
+            f"Basé sur plus d’une centaine de ventes officielles récentes "
+            f"(DVF – data.gouv.fr, dernière mise à jour : {hp['last_update']})"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
         st.markdown(
-            "<div class='card accent-top'>"
-            "📞 Les données DVF ne tiennent pas compte des travaux, prestations, terrain ou nuisances. "
-            "Je vous contacte pour affiner l’estimation avec les éléments visibles uniquement sur place."
+            "<div class='card'>"
+            "<b>Important :</b><br><br>"
+            "Cette estimation est basée sur les données officielles du marché.<br><br>"
+            "Toutefois, aucun algorithme ne peut évaluer :<br>"
+            "– l’état réel du bien<br>"
+            "– les travaux réalisés<br>"
+            "– l’isolation<br>"
+            "– les nuisances<br>"
+            "– l’exposition<br>"
+            "– l’extérieur / terrain<br><br>"
+            "<b>Pour obtenir une estimation précise à ±3 %, une visite du bien est indispensable.</b><br><br>"
+            "Je vous contacte personnellement pour affiner cette estimation et définir "
+            "la meilleure stratégie de mise en vente."
             "</div>",
             unsafe_allow_html=True,
         )
 
-    if submitted:
-        if not (st.session_state.prenom and st.session_state.email and st.session_state.telephone and st.session_state.consent):
-            st.error("Il manque une info (ou le consentement).")
-            st.stop()
-
-        # stock lead "de base"
-        st.session_state["lead"] = {
-            "secteur_effectif": effective_area,
-            "secteur_affiche": sector_display,
-            "code_postal": ai.get("postcode", ""),
-            "ville_api": ai.get("city", ""),
-            "prenom": st.session_state.prenom,
-            "email": st.session_state.email,
-            "telephone": st.session_state.telephone,
-            "adresse": geo.get("label", st.session_state.addr_choice),
-            "lat": geo["lat"],
-            "lon": geo["lon"],
-            "bien_type": st.session_state.bien_type,
-            "surface": float(st.session_state.surface),
-            "pieces": int(st.session_state.nb_pieces),
-            "chambres": int(st.session_state.nb_chambres),
-            "etat": st.session_state.etat,
-            "distance_gare_m": res["distance_gare_m"],
-            "quartier": res.get("quartier", ""),
-            "estimation_min": float(res.get("min")),
-            "estimation_max": float(res.get("max")),
-        }
-
-        # ---------- DVF (barre de chargement) ----------
-        progress = st.progress(0)
-        status = st.empty()
-
-        status.text("🔎 Analyse des ventes locales (DVF)…")
-        progress.progress(20)
-        time.sleep(0.4)
-
-        sales = fetch_dvf_sales(geo["lat"], geo["lon"], 1000)
-
-        if len(sales) < 5:
-            status.text("📍 Pas assez de ventes — extension du rayon…")
-            progress.progress(40)
-            time.sleep(0.3)
-            sales = fetch_dvf_sales(geo["lat"], geo["lon"], 2000)
-
-        status.text("🧹 Filtrage des biens similaires…")
-        progress.progress(60)
-        time.sleep(0.2)
-
-        df = filter_dvf_comparables(sales, st.session_state.bien_type, float(st.session_state.surface))
-
-        status.text("📊 Nettoyage statistique…")
-        progress.progress(80)
-        time.sleep(0.2)
-
-        df = clean_outliers(df)
-
-        status.text("🧠 Calcul estimation affinée…")
-        progress.progress(95)
-        time.sleep(0.2)
-
-        dvf_result = compute_dvf_estimation(df, float(st.session_state.surface))
-
-        progress.progress(100)
-        time.sleep(0.25)
-        progress.empty()
-        status.empty()
-
-        # sauvegarde en session pour réaffichage + éviter de recalculer si rerun
-        st.session_state.dvf_result = dvf_result
-        st.session_state.dvf_comps = df.copy() if df is not None else None
-
-        # rerun pour afficher le bloc DVF au bon endroit (sous le form)
-        st.rerun()
+        # Optional: preview comparables (vague)
+        if hp.get("similaires_preview"):
+            st.markdown("<div class='card accent-top'>", unsafe_allow_html=True)
+            st.markdown("### 🧾 Exemples de comparables (localisation volontairement vague)")
+            for r in hp["similaires_preview"]:
+                try:
+                    mois = pd.to_datetime(r["date_mutation"]).strftime("%m/%Y")
+                except Exception:
+                    mois = "—"
+                dist = int(round(float(r.get("distance_m", 0))))
+                st.markdown(
+                    f"- **{r.get('type_local','')}** · **{int(round(float(r.get('surface_reelle_bati',0))))} m²** · "
+                    f"**{eur(float(r.get('valeur_fonciere',0)))}** · **{mois}** · **{r.get('nom_commune','Secteur')}** (~{dist} m)"
+                )
+            st.markdown("</div>", unsafe_allow_html=True)

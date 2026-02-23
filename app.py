@@ -467,6 +467,8 @@ def dvf_select_similaires(
         low = surface * (1 - tol)
         high = surface * (1 + tol)
         df_fb = df[df["distance_m"] <= rad].copy()
+        df_fb["type_local"] = df_fb["type_local"].apply(normalize_type_local)
+        df_fb = df_fb[df_fb["type_local"] == bien_type].copy()
         df_fb = df_fb[(df_fb["surface_reelle_bati"] >= low) & (df_fb["surface_reelle_bati"] <= high)].copy()
         if df_fb.empty:
             return pd.DataFrame(), 0

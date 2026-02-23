@@ -342,11 +342,19 @@ def on_addr_choice_display_change():
 # ---------------------------
 def normalize_type_local(x: Any) -> str:
     s = str(x or "").strip().lower()
+    s = s.replace("’", "'")
     s = s.replace("appartementement", "appartement")
+    s = s.replace("appartemment", "appartement")
+    s = s.replace("appartemnt", "appartement")
+    s = s.replace("apt", "appartement")
+
+    # variations possibles DVF
     if "appart" in s:
         return "Appartement"
     if "maison" in s:
         return "Maison"
+
+    # fallback
     return "Autre"
 
 @st.cache_data(ttl=6 * 60 * 60, show_spinner=False)
@@ -387,12 +395,17 @@ def dvf_select_similaires(
         return pd.DataFrame(), 0
 
     cutoff = max_date - pd.Timedelta(days=365)
-    df = df_all[df_all["date_mutation"] >= cutoff].copy()
+       df = df_all[df_all["date_mutation"] >= cutoff].copy()
     if df.empty:
         return pd.DataFrame(), 0
 
-    # STRICT type, always
+    # ✅ Renormalise au moment du filtrage (important si parquet hétérogène)
+    df["type_local"] = df["type_local"].apply(normalize_type_local)
+
+    # ✅ STRICT type (jamais de mélange)
     df = df[df["type_local"] == bien_type].copy()
+    if df.empty:
+        return pd.DataFrame(), 0
     if df.empty:
         return pd.DataFrame(), 0
 

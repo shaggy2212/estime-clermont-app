@@ -20,6 +20,9 @@ PRIMARY = "#004D7F"
 ACCENT = "#FF7E79"
 SOFT = "#EAF2FF"
 
+# Progress UX (force visible)
+MIN_PROGRESS_SECONDS = 2.8
+
 # Gare Clermont-de-l'Oise (lon/lat)
 GARE_LON = 2.41767
 GARE_LAT = 49.38531
@@ -339,9 +342,7 @@ def on_addr_choice_display_change():
 # ---------------------------
 def normalize_type_local(x: Any) -> str:
     s = str(x or "").strip().lower()
-    # Fix bug found in your parquet stats
     s = s.replace("appartementement", "appartement")
-    # broad normalize
     if "appart" in s:
         return "Appartement"
     if "maison" in s:
@@ -363,11 +364,8 @@ def load_dvf_local() -> pd.DataFrame:
 
     df["type_local"] = df.get("type_local").apply(normalize_type_local)
 
-    # minimal required
     df = df.dropna(subset=["date_mutation", "valeur_fonciere", "surface_reelle_bati", "longitude", "latitude", "type_local"])
     df = df[df["type_local"].isin(["Maison", "Appartement"])]
-
-    # quality
     df = df[(df["valeur_fonciere"] > 1000) & (df["surface_reelle_bati"] >= 10)]
     return df
 
@@ -378,14 +376,6 @@ def dvf_select_similaires(
     bien_type: str,
     surface: float,
 ) -> Tuple[pd.DataFrame, int]:
-    """
-    Robust selection:
-    - 12 months relative to max date in file (stable even if DVF not "today")
-    - strict type (no mixing Maison/Appartement)
-    - progressive radius + progressive surface tolerance
-    - outlier trimming when enough points
-    Returns (df_similaires, used_radius_m)
-    """
     if df_all.empty:
         return pd.DataFrame(), 0
 
@@ -401,18 +391,17 @@ def dvf_select_similaires(
     if df.empty:
         return pd.DataFrame(), 0
 
-    # STRICT TYPE: never mix
+    # STRICT type, always
     df = df[df["type_local"] == bien_type].copy()
     if df.empty:
         return pd.DataFrame(), 0
 
-    # Vectorized distance (fast)
+    # Vectorized distance
     lat_arr = df["latitude"].to_numpy(dtype=float)
     lon_arr = df["longitude"].to_numpy(dtype=float)
     lat0 = float(lat)
     lon0 = float(lon)
 
-    # vectorized haversine
     R = 6371000.0
     phi1 = np.radians(lat0)
     phi2 = np.radians(lat_arr)
@@ -422,7 +411,6 @@ def dvf_select_similaires(
     dist = 2 * R * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
     df["distance_m"] = dist
 
-    # progressive params
     radii = [800, 1500, 2500, 3500]
     tolerances = [0.20, 0.25, 0.35] if bien_type == "Appartement" else [0.25, 0.35, 0.45]
     min_needed = 4
@@ -446,7 +434,7 @@ def dvf_select_similaires(
             df_s = df_s.replace([np.inf, -np.inf], np.nan).dropna(subset=["prix_m2"])
 
             # trim outliers if enough
-            if len(df_s) >= 8:
+            if len(df_s) >= 10:
                 q10 = df_s["prix_m2"].quantile(0.10)
                 q90 = df_s["prix_m2"].quantile(0.90)
                 df_s = df_s[(df_s["prix_m2"] >= q10) & (df_s["prix_m2"] <= q90)]
@@ -460,7 +448,7 @@ def dvf_select_similaires(
             break
 
     if best.empty:
-        # no strict comparable enough: return closest few within widest tol, but still strict type
+        # fallback: still strict type and reasonable tolerance
         rad = radii[-1]
         tol = tolerances[-1]
         low = surface * (1 - tol)
@@ -476,6 +464,38 @@ def dvf_select_similaires(
 
     best = best.sort_values(["distance_m", "date_mutation"], ascending=[True, False]).copy()
     return best, used_radius
+
+def reliability_and_weight(n: int) -> Tuple[str, float]:
+    if n > 15:
+        return "🟢 Très élevée", 0.78
+    if n >= 8:
+        return "🟢 Élevée", 0.72
+    if n >= 4:
+        return "🟡 Bonne", 0.62
+    if n >= 2:
+        return "🟠 Modérée", 0.50
+    return "🔴 Faible", 0.0
+
+def target_band_pct(label: str) -> float:
+    # full width percentage around center
+    if "Très élevée" in label:
+        return 0.06  # ±3%
+    if "Élevée" in label:
+        return 0.07  # ±3.5%
+    if "Bonne" in label:
+        return 0.08  # ±4%
+    if "Modérée" in label:
+        return 0.10  # ±5%
+    return 0.14      # fallback (not used if low)
+
+def abs_band_caps(bien_type: str) -> Tuple[float, float]:
+    # min/max FULL width caps (in euros)
+    if bien_type == "Appartement":
+        return 6000.0, 12000.0
+    return 8000.0, 18000.0
+
+def clamp(x: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, x))
 
 # ---------------------------
 # Header
@@ -506,7 +526,6 @@ if st.session_state.step == 1:
         area_options = [AUTO_AREA] + list(AREAS.keys())
         st.selectbox("Choisissez la commune (ou laissez en auto)", area_options, key="area_name")
 
-        # manual override
         if st.session_state.area_name in AREAS:
             st.session_state.detected_area = st.session_state.area_name
             st.session_state.area_locked = True
@@ -543,7 +562,6 @@ if st.session_state.step == 1:
 
         typed = st.session_state.addr_typed.strip()
         addr_status = st.empty()
-
         suggestions_display: List[str] = []
 
         if len(typed) >= 3:
@@ -654,7 +672,7 @@ if st.session_state.step == 1:
             "✅ Adresse filtrée sur la commune (auto ou manuel)<br/>"
             "✅ Distance à la gare calculée automatiquement<br/>"
             "✅ Fourchette immédiate<br/>"
-            "✅ Fourchette optimisée (DVF + critères) après email"
+            "✅ Fourchette optimisée (DVF + comparables) après email"
             "</div>",
             unsafe_allow_html=True,
         )
@@ -739,9 +757,6 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
 
     st.markdown("<hr/>", unsafe_allow_html=True)
 
-    # ---------------------------
-    # Contact form
-    # ---------------------------
     st.markdown("## 📩 Recevoir la fourchette optimisée (comparables DVF)")
     st.markdown("<div class='card accent-top'>", unsafe_allow_html=True)
 
@@ -762,7 +777,6 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
         if not (st.session_state.prenom and st.session_state.email and st.session_state.telephone and st.session_state.consent):
             st.error("Il manque une info (ou le consentement).")
         else:
-            # Save lead payload
             st.session_state["lead"] = {
                 "secteur_effectif": effective_area,
                 "secteur_affiche": sector_display,
@@ -785,18 +799,23 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                 "estimation_max_algo": float(res["max"]),
             }
 
-            # Force a visible progress bar (even if fast)
             t0 = time.time()
             progress = st.progress(0, text="🔎 Recherche des ventes comparables (12 mois)…")
 
+            def progress_step(pct: int, txt: str, min_sleep: float = 0.25):
+                progress.progress(pct, text=txt)
+                time.sleep(min_sleep)
+
             try:
-                progress.progress(20, text="📦 Chargement de la base DVF locale…")
+                progress_step(10, "📦 Chargement de la base DVF locale…", 0.35)
                 df_all = load_dvf_local()
                 if df_all.empty:
                     st.warning("⚠️ Base DVF locale introuvable (fichier parquet manquant).")
                     st.stop()
 
-                progress.progress(45, text="🧠 Sélection de biens comparables (type + surface + rayon)…")
+                progress_step(30, "🧠 Analyse du secteur et préparation…", 0.35)
+
+                progress_step(55, "🏡 Sélection de biens comparables (type + surface + rayon)…", 0.45)
                 df_local, used_radius = dvf_select_similaires(
                     df_all=df_all,
                     lat=float(geo["lat"]),
@@ -805,14 +824,18 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                     surface=float(st.session_state.surface),
                 )
 
-                # De-dup (avoid duplicate preview)
+                # HARD ENFORCE type again (never show wrong type)
+                if not df_local.empty:
+                    df_local = df_local[df_local["type_local"] == st.session_state.bien_type].copy()
+
+                # De-dup preview
                 if not df_local.empty:
                     df_local = df_local.drop_duplicates(
                         subset=["date_mutation", "valeur_fonciere", "surface_reelle_bati", "type_local", "nom_commune"],
                         keep="first",
                     )
 
-                progress.progress(70, text="📊 Calcul de la fourchette optimisée…")
+                progress_step(75, "📊 Calcul de la fourchette optimisée…", 0.50)
 
                 algo_min = float(res["min"])
                 algo_max = float(res["max"])
@@ -823,25 +846,14 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                 max_date = df_all["date_mutation"].max()
                 last_update = max_date.strftime("%B %Y") if pd.notna(max_date) else "—"
 
-                # Fiabilité + poids DVF (only when strict comparables exist)
-                if nb_similaires > 15:
-                    fiabilite_label, poids_dvf = "🟢 Très élevée", 0.75
-                elif nb_similaires >= 8:
-                    fiabilite_label, poids_dvf = "🟢 Élevée", 0.70
-                elif nb_similaires >= 4:
-                    fiabilite_label, poids_dvf = "🟡 Bonne", 0.60
-                elif nb_similaires >= 2:
-                    fiabilite_label, poids_dvf = "🟠 Modérée", 0.50
-                else:
-                    fiabilite_label, poids_dvf = "🔴 Faible", 0.0  # no DVF contribution
-
+                fiabilite_label, poids_dvf = reliability_and_weight(nb_similaires)
                 note_guardrail = ""
 
                 if nb_similaires < 2:
                     opt_min, opt_max = algo_min, algo_max
                     note_guardrail = "Pas assez de comparables stricts sur 12 mois : la fourchette reste proche de l’estimation immédiate."
                 else:
-                    # DVF range from quantiles (more stable than median)
+                    # DVF band from quantiles
                     q_low, q_high = 0.25, 0.75
                     dvf_m2_low = float(df_local["prix_m2"].quantile(q_low))
                     dvf_m2_high = float(df_local["prix_m2"].quantile(q_high))
@@ -849,34 +861,41 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                     dvf_min = dvf_m2_low * float(st.session_state.surface)
                     dvf_max = dvf_m2_high * float(st.session_state.surface)
 
-                    # hybrid on bounds
+                    # Hybrid on bounds
                     opt_min = poids_dvf * dvf_min + (1 - poids_dvf) * algo_min
                     opt_max = poids_dvf * dvf_max + (1 - poids_dvf) * algo_max
 
-                    # Guarantee "optimized" = not wider than initial and usually tighter
-                    target_width = algo_width * (0.90 if poids_dvf > 0 else 1.0)
-                    opt_width = opt_max - opt_min
-                    if opt_width > target_width and opt_width > 0:
-                        c = (opt_min + opt_max) / 2.0
-                        opt_min = c - target_width / 2.0
-                        opt_max = c + target_width / 2.0
+                    # Force "optimized" narrower and not weird
+                    # 1) width target by reliability
+                    band_pct = target_band_pct(fiabilite_label)
+                    full_width_target = max(1.0, ((opt_min + opt_max) / 2.0) * band_pct)
 
-                    # Clamp so it doesn't go "too far" outside the initial range
-                    slack = algo_width * 0.15
+                    # 2) absolute caps by type
+                    abs_min_cap, abs_max_cap = abs_band_caps(st.session_state.bien_type)
+                    full_width_target = clamp(full_width_target, abs_min_cap, abs_max_cap)
+
+                    # 3) never wider than initial & make it meaningfully tighter
+                    full_width_target = min(full_width_target, algo_width * 0.85)
+
+                    c = (opt_min + opt_max) / 2.0
+                    opt_min = c - full_width_target / 2.0
+                    opt_max = c + full_width_target / 2.0
+
+                    # 4) Clamp close to algo range (avoid jumps)
+                    slack = algo_width * 0.12
                     opt_min = max(opt_min, algo_min - slack)
                     opt_max = min(opt_max, algo_max + slack)
 
-                    # If still suspicious (DVF vs algo too far), damp DVF weight
+                    # 5) If DVF center far from algo center, damp
                     opt_center = (opt_min + opt_max) / 2.0
                     ratio = opt_center / max(1.0, algo_center)
-                    if ratio > 1.25 or ratio < 0.75:
+                    if ratio > 1.20 or ratio < 0.80:
                         note_guardrail = "Marché hétérogène : estimation optimisée ajustée pour éviter une incohérence."
-                        # pull back toward algo center
-                        pull = 0.35
+                        pull = 0.40
                         opt_min = (1 - pull) * opt_min + pull * algo_min
                         opt_max = (1 - pull) * opt_max + pull * algo_max
 
-                # Preview comparables (vague)
+                # Build preview (vague)
                 preview_records: List[Dict[str, Any]] = []
                 if nb_similaires > 0:
                     prev = df_local.sort_values(["distance_m", "date_mutation"], ascending=[True, False]).head(5)
@@ -894,15 +913,15 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                             "dist": int(round(float(r.get("distance_m", 0)) / 100.0) * 100),
                         })
 
-                # Force minimum duration for progress bar UX
-                progress.progress(95, text="✨ Finalisation…")
-                min_seconds = 1.4
+                progress_step(90, "🔍 Vérification de cohérence…", 0.40)
+
+                # enforce minimum UX duration
                 dt = time.time() - t0
-                if dt < min_seconds:
-                    time.sleep(min_seconds - dt)
+                if dt < MIN_PROGRESS_SECONDS:
+                    time.sleep(MIN_PROGRESS_SECONDS - dt)
 
                 progress.progress(100, text="✅ Terminé.")
-                time.sleep(0.15)
+                time.sleep(0.20)
 
                 st.session_state.hybrid_payload = {
                     "fiabilite_label": fiabilite_label,
@@ -914,6 +933,7 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                     "used_radius": int(used_radius),
                     "note_guardrail": note_guardrail,
                     "similaires_preview": preview_records,
+                    "bien_type": st.session_state.bien_type,
                 }
                 st.session_state.hybrid_done = True
 
@@ -923,9 +943,7 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
             st.success(f"Merci {st.session_state.prenom} ✅ Je te contacte rapidement pour affiner et te donner des comparables précis.")
             st.rerun()
 
-    # ---------------------------
-    # Render optimized range
-    # ---------------------------
+    # Render optimized
     if st.session_state.hybrid_done and st.session_state.hybrid_payload:
         hp = st.session_state.hybrid_payload
 
@@ -966,7 +984,7 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
             "– les nuisances<br>"
             "– l’exposition<br>"
             "– l’extérieur / terrain<br><br>"
-            "<b>Pour obtenir une estimation précise à ±3 %, une visite du bien est indispensable.</b><br><br>"
+            "<b>Pour obtenir une estimation précise, une visite du bien est indispensable.</b><br><br>"
             "Je vous contacte personnellement pour affiner cette estimation et définir "
             "la meilleure stratégie de mise en vente."
             "</div>",

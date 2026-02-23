@@ -2,6 +2,7 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import requests
+import time
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 
@@ -334,8 +335,19 @@ def on_addr_choice_display_change():
         st.session_state.area_locked = True
 
 # ---------------------------
-# DVF local (robuste)
+# DVF local: load + normalize (incl. "appartementement" fix)
 # ---------------------------
+def normalize_type_local(x: Any) -> str:
+    s = str(x or "").strip().lower()
+    # Fix bug found in your parquet stats
+    s = s.replace("appartementement", "appartement")
+    # broad normalize
+    if "appart" in s:
+        return "Appartement"
+    if "maison" in s:
+        return "Maison"
+    return "Autre"
+
 @st.cache_data(ttl=6 * 60 * 60, show_spinner=False)
 def load_dvf_local() -> pd.DataFrame:
     if not DVF_LOCAL_PATH.exists():
@@ -343,33 +355,36 @@ def load_dvf_local() -> pd.DataFrame:
 
     df = pd.read_parquet(DVF_LOCAL_PATH)
 
-    # normalize types
-    df["date_mutation"] = pd.to_datetime(df["date_mutation"], errors="coerce")
-    df["valeur_fonciere"] = pd.to_numeric(df["valeur_fonciere"], errors="coerce")
-    df["surface_reelle_bati"] = pd.to_numeric(df["surface_reelle_bati"], errors="coerce")
-    df["longitude"] = pd.to_numeric(df["longitude"], errors="coerce")
-    df["latitude"] = pd.to_numeric(df["latitude"], errors="coerce")
+    df["date_mutation"] = pd.to_datetime(df.get("date_mutation"), errors="coerce")
+    df["valeur_fonciere"] = pd.to_numeric(df.get("valeur_fonciere"), errors="coerce")
+    df["surface_reelle_bati"] = pd.to_numeric(df.get("surface_reelle_bati"), errors="coerce")
+    df["longitude"] = pd.to_numeric(df.get("longitude"), errors="coerce")
+    df["latitude"] = pd.to_numeric(df.get("latitude"), errors="coerce")
 
-    # NORMALISATION type_local (évite les soucis 'MAISON', 'Maison ', etc.)
-    df["type_local"] = df["type_local"].astype(str).str.strip().str.title()
+    df["type_local"] = df.get("type_local").apply(normalize_type_local)
 
+    # minimal required
     df = df.dropna(subset=["date_mutation", "valeur_fonciere", "surface_reelle_bati", "longitude", "latitude", "type_local"])
     df = df[df["type_local"].isin(["Maison", "Appartement"])]
 
-    # filtre qualité
+    # quality
     df = df[(df["valeur_fonciere"] > 1000) & (df["surface_reelle_bati"] >= 10)]
     return df
 
-def dvf_select_similaires_robust(
+def dvf_select_similaires(
     df_all: pd.DataFrame,
     lat: float,
     lon: float,
     bien_type: str,
-    surface: float
+    surface: float,
 ) -> Tuple[pd.DataFrame, int]:
     """
-    Retourne (df_similaires, rayon_utilise_m).
-    Sélection robuste: 12 mois, type strict, surface tol progressive, rayon progressif, min comparables.
+    Robust selection:
+    - 12 months relative to max date in file (stable even if DVF not "today")
+    - strict type (no mixing Maison/Appartement)
+    - progressive radius + progressive surface tolerance
+    - outlier trimming when enough points
+    Returns (df_similaires, used_radius_m)
     """
     if df_all.empty:
         return pd.DataFrame(), 0
@@ -377,29 +392,40 @@ def dvf_select_similaires_robust(
     bien_type = (bien_type or "").strip().title()
     surface = float(surface)
 
-    # 12 mois glissants
-    cutoff = pd.Timestamp.now(tz=None) - pd.Timedelta(days=365)
+    max_date = df_all["date_mutation"].max()
+    if pd.isna(max_date):
+        return pd.DataFrame(), 0
+
+    cutoff = max_date - pd.Timedelta(days=365)
     df = df_all[df_all["date_mutation"] >= cutoff].copy()
     if df.empty:
         return pd.DataFrame(), 0
 
-    # type strict dès le départ (sinon jamais cohérent)
+    # STRICT TYPE: never mix
     df = df[df["type_local"] == bien_type].copy()
     if df.empty:
         return pd.DataFrame(), 0
 
-    # distance
-    df["distance_m"] = df.apply(lambda r: haversine_m(lat, lon, r["latitude"], r["longitude"]), axis=1)
+    # Vectorized distance (fast)
+    lat_arr = df["latitude"].to_numpy(dtype=float)
+    lon_arr = df["longitude"].to_numpy(dtype=float)
+    lat0 = float(lat)
+    lon0 = float(lon)
 
-    # Paramètres adaptatifs
-    radii = [800, 1500, 2500, 3500]  # m
-    # Appartement: plutôt serré, Maison: un peu plus large
-    if bien_type == "Appartement":
-        tolerances = [0.20, 0.25, 0.35]  # +/- %
-    else:
-        tolerances = [0.25, 0.35, 0.45]
+    # vectorized haversine
+    R = 6371000.0
+    phi1 = np.radians(lat0)
+    phi2 = np.radians(lat_arr)
+    dphi = np.radians(lat_arr - lat0)
+    dl = np.radians(lon_arr - lon0)
+    a = np.sin(dphi / 2) ** 2 + np.cos(phi1) * np.cos(phi2) * np.sin(dl / 2) ** 2
+    dist = 2 * R * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+    df["distance_m"] = dist
 
-    min_needed = 4  # en dessous => fiabilité pas "bonne"
+    # progressive params
+    radii = [800, 1500, 2500, 3500]
+    tolerances = [0.20, 0.25, 0.35] if bien_type == "Appartement" else [0.25, 0.35, 0.45]
+    min_needed = 4
 
     best = pd.DataFrame()
     used_radius = 0
@@ -416,11 +442,10 @@ def dvf_select_similaires_robust(
             if df_s.empty:
                 continue
 
-            # prix m2
             df_s["prix_m2"] = df_s["valeur_fonciere"] / df_s["surface_reelle_bati"]
             df_s = df_s.replace([np.inf, -np.inf], np.nan).dropna(subset=["prix_m2"])
 
-            # coupe quelques outliers si assez de points
+            # trim outliers if enough
             if len(df_s) >= 8:
                 q10 = df_s["prix_m2"].quantile(0.10)
                 q90 = df_s["prix_m2"].quantile(0.90)
@@ -434,26 +459,21 @@ def dvf_select_similaires_robust(
         if not best.empty:
             break
 
-    # fallback (si pas assez de comparables): on renvoie quand même les plus proches SURFACE OK (mais faible fiabilité)
     if best.empty:
-        # surface tol la plus large + rayon max
+        # no strict comparable enough: return closest few within widest tol, but still strict type
         rad = radii[-1]
         tol = tolerances[-1]
         low = surface * (1 - tol)
         high = surface * (1 + tol)
-
         df_fb = df[df["distance_m"] <= rad].copy()
         df_fb = df_fb[(df_fb["surface_reelle_bati"] >= low) & (df_fb["surface_reelle_bati"] <= high)].copy()
-
         if df_fb.empty:
             return pd.DataFrame(), 0
-
         df_fb["prix_m2"] = df_fb["valeur_fonciere"] / df_fb["surface_reelle_bati"]
         df_fb = df_fb.replace([np.inf, -np.inf], np.nan).dropna(subset=["prix_m2"])
-        df_fb = df_fb.sort_values("distance_m").head(3)  # max 3 pour preview
+        df_fb = df_fb.sort_values(["distance_m", "date_mutation"], ascending=[True, False]).head(3)
         return df_fb, rad
 
-    # trie final: plus proches + récents
     best = best.sort_values(["distance_m", "date_mutation"], ascending=[True, False]).copy()
     return best, used_radius
 
@@ -634,7 +654,7 @@ if st.session_state.step == 1:
             "✅ Adresse filtrée sur la commune (auto ou manuel)<br/>"
             "✅ Distance à la gare calculée automatiquement<br/>"
             "✅ Fourchette immédiate<br/>"
-            "✅ Estimation hybride (DVF + critères) après email"
+            "✅ Fourchette optimisée (DVF + critères) après email"
             "</div>",
             unsafe_allow_html=True,
         )
@@ -722,7 +742,7 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
     # ---------------------------
     # Contact form
     # ---------------------------
-    st.markdown("## 📩 Débloquer l’estimation hybride (DVF + critères)")
+    st.markdown("## 📩 Recevoir la fourchette optimisée (comparables DVF)")
     st.markdown("<div class='card accent-top'>", unsafe_allow_html=True)
 
     with st.form("contact_form", clear_on_submit=False):
@@ -734,7 +754,7 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
             st.text_input("Votre téléphone", key="telephone")
             st.checkbox("J’accepte d’être recontacté au sujet de cette estimation (sans spam).", key="consent")
 
-        submitted = st.form_submit_button("✅ Obtenir l’estimation hybride", use_container_width=True)
+        submitted = st.form_submit_button("✅ Obtenir la fourchette optimisée", use_container_width=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -742,7 +762,7 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
         if not (st.session_state.prenom and st.session_state.email and st.session_state.telephone and st.session_state.consent):
             st.error("Il manque une info (ou le consentement).")
         else:
-            # Save lead payload (future ConvertKit)
+            # Save lead payload
             st.session_state["lead"] = {
                 "secteur_effectif": effective_area,
                 "secteur_affiche": sector_display,
@@ -765,18 +785,19 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                 "estimation_max_algo": float(res["max"]),
             }
 
+            # Force a visible progress bar (even if fast)
+            t0 = time.time()
             progress = st.progress(0, text="🔎 Recherche des ventes comparables (12 mois)…")
 
             try:
-                progress.progress(15, text="📦 Chargement de la base DVF locale…")
+                progress.progress(20, text="📦 Chargement de la base DVF locale…")
                 df_all = load_dvf_local()
                 if df_all.empty:
-                    progress.empty()
                     st.warning("⚠️ Base DVF locale introuvable (fichier parquet manquant).")
                     st.stop()
 
-                progress.progress(40, text="🧠 Sélection des biens similaires (type + surface + rayon)…")
-                df_local, used_radius = dvf_select_similaires_robust(
+                progress.progress(45, text="🧠 Sélection de biens comparables (type + surface + rayon)…")
+                df_local, used_radius = dvf_select_similaires(
                     df_all=df_all,
                     lat=float(geo["lat"]),
                     lon=float(geo["lon"]),
@@ -784,72 +805,80 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                     surface=float(st.session_state.surface),
                 )
 
-                progress.progress(65, text="📊 Calcul de l’estimation hybride…")
-
-                estimation_algo_centrale = (float(res["min"]) + float(res["max"])) / 2.0
-
-                # DVF estimate (si on a des points)
-                if df_local.empty:
-                    nb_similaires = 0
-                    estimation_dvf = None
-                else:
-                    nb_similaires = int(len(df_local))
-                    # médiane prix/m²
-                    median_m2 = float(df_local["prix_m2"].median())
-                    estimation_dvf = median_m2 * float(st.session_state.surface)
-
-                # ----------------------------
-                # Fiabilité (basée sur nb_similaires réellement retenus)
-                # + pondération DVF + marge dynamique
-                # ----------------------------
-                if nb_similaires > 15:
-                    fiabilite_label = "🟢 Très élevée"
-                    poids_dvf = 0.75
-                    marge = 0.04
-                elif nb_similaires >= 8:
-                    fiabilite_label = "🟢 Élevée"
-                    poids_dvf = 0.70
-                    marge = 0.05
-                elif nb_similaires >= 4:
-                    fiabilite_label = "🟡 Bonne"
-                    poids_dvf = 0.60
-                    marge = 0.06
-                elif nb_similaires >= 2:
-                    fiabilite_label = "🟠 Modérée"
-                    poids_dvf = 0.50
-                    marge = 0.08
-                else:
-                    fiabilite_label = "🔴 Faible"
-                    poids_dvf = 0.35
-                    marge = 0.10
-
-                # ----------------------------
-                # Garde-fou anti-incohérence:
-                # si DVF diverge trop de l'algo, on baisse la pondération DVF
-                # (évite le saut 130k -> 200k)
-                # ----------------------------
-                note_guardrail = ""
-                if estimation_dvf is None:
-                    estimation_finale = estimation_algo_centrale
-                    note_guardrail = "DVF insuffisante : estimation basée principalement sur l'algorithme local."
-                else:
-                    ratio = estimation_dvf / max(1.0, estimation_algo_centrale)
-                    if ratio > 1.35 or ratio < 0.65:
-                        poids_dvf = max(0.25, poids_dvf * 0.5)
-                        marge = min(0.12, marge + 0.02)
-                        note_guardrail = "Marché hétérogène : pondération DVF réduite pour éviter une estimation incohérente."
-
-                    estimation_finale = (poids_dvf * estimation_dvf) + ((1 - poids_dvf) * estimation_algo_centrale)
-
-                fourchette_min = estimation_finale * (1 - marge)
-                fourchette_max = estimation_finale * (1 + marge)
-
-                # Dernière “mise à jour” affichée = dernier mois de mutation dans le fichier (effet data fraîche)
-                last_update = df_all["date_mutation"].max().strftime("%B %Y")
-
-                # Preview comparables (vague) — et surtout cohérents type/surface
-                preview_records: List[Dict[str, Any]] = []
+                # De-dup (avoid duplicate preview)
                 if not df_local.empty:
+                    df_local = df_local.drop_duplicates(
+                        subset=["date_mutation", "valeur_fonciere", "surface_reelle_bati", "type_local", "nom_commune"],
+                        keep="first",
+                    )
+
+                progress.progress(70, text="📊 Calcul de la fourchette optimisée…")
+
+                algo_min = float(res["min"])
+                algo_max = float(res["max"])
+                algo_center = (algo_min + algo_max) / 2.0
+                algo_width = algo_max - algo_min
+
+                nb_similaires = int(len(df_local))
+                max_date = df_all["date_mutation"].max()
+                last_update = max_date.strftime("%B %Y") if pd.notna(max_date) else "—"
+
+                # Fiabilité + poids DVF (only when strict comparables exist)
+                if nb_similaires > 15:
+                    fiabilite_label, poids_dvf = "🟢 Très élevée", 0.75
+                elif nb_similaires >= 8:
+                    fiabilite_label, poids_dvf = "🟢 Élevée", 0.70
+                elif nb_similaires >= 4:
+                    fiabilite_label, poids_dvf = "🟡 Bonne", 0.60
+                elif nb_similaires >= 2:
+                    fiabilite_label, poids_dvf = "🟠 Modérée", 0.50
+                else:
+                    fiabilite_label, poids_dvf = "🔴 Faible", 0.0  # no DVF contribution
+
+                note_guardrail = ""
+
+                if nb_similaires < 2:
+                    opt_min, opt_max = algo_min, algo_max
+                    note_guardrail = "Pas assez de comparables stricts sur 12 mois : la fourchette reste proche de l’estimation immédiate."
+                else:
+                    # DVF range from quantiles (more stable than median)
+                    q_low, q_high = 0.25, 0.75
+                    dvf_m2_low = float(df_local["prix_m2"].quantile(q_low))
+                    dvf_m2_high = float(df_local["prix_m2"].quantile(q_high))
+
+                    dvf_min = dvf_m2_low * float(st.session_state.surface)
+                    dvf_max = dvf_m2_high * float(st.session_state.surface)
+
+                    # hybrid on bounds
+                    opt_min = poids_dvf * dvf_min + (1 - poids_dvf) * algo_min
+                    opt_max = poids_dvf * dvf_max + (1 - poids_dvf) * algo_max
+
+                    # Guarantee "optimized" = not wider than initial and usually tighter
+                    target_width = algo_width * (0.90 if poids_dvf > 0 else 1.0)
+                    opt_width = opt_max - opt_min
+                    if opt_width > target_width and opt_width > 0:
+                        c = (opt_min + opt_max) / 2.0
+                        opt_min = c - target_width / 2.0
+                        opt_max = c + target_width / 2.0
+
+                    # Clamp so it doesn't go "too far" outside the initial range
+                    slack = algo_width * 0.15
+                    opt_min = max(opt_min, algo_min - slack)
+                    opt_max = min(opt_max, algo_max + slack)
+
+                    # If still suspicious (DVF vs algo too far), damp DVF weight
+                    opt_center = (opt_min + opt_max) / 2.0
+                    ratio = opt_center / max(1.0, algo_center)
+                    if ratio > 1.25 or ratio < 0.75:
+                        note_guardrail = "Marché hétérogène : estimation optimisée ajustée pour éviter une incohérence."
+                        # pull back toward algo center
+                        pull = 0.35
+                        opt_min = (1 - pull) * opt_min + pull * algo_min
+                        opt_max = (1 - pull) * opt_max + pull * algo_max
+
+                # Preview comparables (vague)
+                preview_records: List[Dict[str, Any]] = []
+                if nb_similaires > 0:
                     prev = df_local.sort_values(["distance_m", "date_mutation"], ascending=[True, False]).head(5)
                     for _, r in prev.iterrows():
                         try:
@@ -862,17 +891,25 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                             "prix": float(r.get("valeur_fonciere", 0)),
                             "mois": mois,
                             "commune": str(r.get("nom_commune", "Secteur")),
-                            "dist": int(round(float(r.get("distance_m", 0))/100.0)*100),  # arrondi 100m
+                            "dist": int(round(float(r.get("distance_m", 0)) / 100.0) * 100),
                         })
+
+                # Force minimum duration for progress bar UX
+                progress.progress(95, text="✨ Finalisation…")
+                min_seconds = 1.4
+                dt = time.time() - t0
+                if dt < min_seconds:
+                    time.sleep(min_seconds - dt)
+
+                progress.progress(100, text="✅ Terminé.")
+                time.sleep(0.15)
 
                 st.session_state.hybrid_payload = {
                     "fiabilite_label": fiabilite_label,
                     "nb_similaires": nb_similaires,
                     "poids_dvf": float(poids_dvf),
-                    "marge": float(marge),
-                    "estimation_finale": float(estimation_finale),
-                    "fourchette_min": float(fourchette_min),
-                    "fourchette_max": float(fourchette_max),
+                    "opt_min": float(opt_min),
+                    "opt_max": float(opt_max),
                     "last_update": last_update,
                     "used_radius": int(used_radius),
                     "note_guardrail": note_guardrail,
@@ -880,7 +917,6 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                 }
                 st.session_state.hybrid_done = True
 
-                progress.progress(100, text="✅ Terminé.")
             finally:
                 progress.empty()
 
@@ -888,7 +924,7 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
             st.rerun()
 
     # ---------------------------
-    # Render hybrid result after submit
+    # Render optimized range
     # ---------------------------
     if st.session_state.hybrid_done and st.session_state.hybrid_payload:
         hp = st.session_state.hybrid_payload
@@ -898,11 +934,10 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
 
         st.markdown(
             f"<div class='metric'><p class='k'>Valeur estimée</p>"
-            f"<p class='v'>{eur(hp['fourchette_min'])} – {eur(hp['fourchette_max'])}</p></div>",
+            f"<p class='v'>{eur(hp['opt_min'])} – {eur(hp['opt_max'])}</p></div>",
             unsafe_allow_html=True,
         )
 
-        # Texte officiel + date + fiabilité
         st.markdown(
             f"<div class='card soft'>"
             f"<b>Indice de fiabilité :</b> {hp['fiabilite_label']}<br>"
@@ -920,7 +955,6 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                 unsafe_allow_html=True,
             )
 
-        # Encadrement humain / prise de RDV
         st.markdown(
             "<div class='card'>"
             "<b>Important :</b><br><br>"
@@ -939,7 +973,6 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
             unsafe_allow_html=True,
         )
 
-        # Preview comparables (cohérents)
         if hp.get("similaires_preview"):
             st.markdown("<div class='card accent-top'>", unsafe_allow_html=True)
             st.markdown("### 🧾 Exemples de comparables (localisation volontairement vague)")

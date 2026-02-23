@@ -912,6 +912,12 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
 
                 # Build preview (vague)
                 preview_records: List[Dict[str, Any]] = []
+                                # ✅ Ultimate guardrail: on n'affiche que le type demandé
+                if not df_local.empty:
+                    df_local["type_local"] = df_local["type_local"].apply(normalize_type_local)
+                    df_local = df_local[df_local["type_local"] == st.session_state.bien_type].copy()
+
+                nb_similaires = int(len(df_local))
                 if nb_similaires > 0:
                     prev = df_local.sort_values(["distance_m", "date_mutation"], ascending=[True, False]).head(5)
                     for _, r in prev.iterrows():

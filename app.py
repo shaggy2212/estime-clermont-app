@@ -48,6 +48,9 @@ GEOPF_SEARCH_URL = "https://data.geopf.fr/geocodage/search"
 # DVF local (généré par build_dvf_local.py)
 DVF_LOCAL_PATH = Path("data/dvf_local.parquet")
 
+# Cache buster (incrémente si tu veux forcer le reload DVF)
+DVF_CACHE_BUSTER = "v3"
+
 # ---------------------------
 # Session state
 # ---------------------------
@@ -184,8 +187,10 @@ def haversine_m(lat1, lon1, lat2, lon2) -> float:
     a = np.sin(dphi / 2) ** 2 + np.cos(phi1) * np.cos(phi2) * np.sin(dl / 2) ** 2
     return float(2 * R * np.arctan2(np.sqrt(a), np.sqrt(1 - a)))
 
+
 def norm(s: str) -> str:
     return (s or "").strip().lower().replace("’", "'")
+
 
 def normalize_query_to_area(q: str, city: str, postcode: str) -> str:
     q = (q or "").strip()
@@ -196,6 +201,7 @@ def normalize_query_to_area(q: str, city: str, postcode: str) -> str:
         q = f"{q}, {postcode} {city}, Oise, France"
     return q
 
+
 def get_effective_area() -> Tuple[str, Dict[str, str]]:
     if st.session_state.area_name in AREAS:
         a = st.session_state.area_name
@@ -204,6 +210,7 @@ def get_effective_area() -> Tuple[str, Dict[str, str]]:
     if detected in AREAS:
         return detected, AREAS[detected]
     return DEFAULT_AREA, AREAS[DEFAULT_AREA]
+
 
 @st.cache_data(ttl=60 * 60, show_spinner=False)
 def geopf_completion(text: str, postcode: str, city: str, max_resp: int = 7) -> List[str]:
@@ -240,6 +247,7 @@ def geopf_completion(text: str, postcode: str, city: str, max_resp: int = 7) -> 
             seen.add(lab)
     return dedup
 
+
 @st.cache_data(ttl=24 * 60 * 60, show_spinner=False)
 def geopf_geocode_one(query: str) -> Optional[Dict[str, Any]]:
     if not query:
@@ -260,6 +268,7 @@ def geopf_geocode_one(query: str) -> Optional[Dict[str, Any]]:
     lon, lat = float(coords[0]), float(coords[1])
     return {"lat": lat, "lon": lon, "label": props.get("label") or query}
 
+
 def quartier_from_distance(distance_m: float) -> str:
     if distance_m < 500:
         return "Nord (Gare)"
@@ -271,6 +280,7 @@ def quartier_from_distance(distance_m: float) -> str:
         return "Est (Pavillons)"
     return "Ouest (Neuf)"
 
+
 def base_prix_m2(quartier: str, bien_type: str) -> float:
     table = {
         "Centre-ville": {"Maison": 2100, "Appartement": 2500},
@@ -280,6 +290,7 @@ def base_prix_m2(quartier: str, bien_type: str) -> float:
         "Ouest (Neuf)": {"Maison": 2450, "Appartement": 2800},
     }
     return float(table[quartier][bien_type])
+
 
 def estimate_price(
     bien_type: str,
@@ -314,8 +325,10 @@ def estimate_price(
         },
     }
 
+
 def eur(x: float) -> str:
     return f"{x:,.0f} €".replace(",", " ")
+
 
 def parse_display_choice(display_value: str) -> Tuple[Optional[str], str]:
     s = (display_value or "").strip()
@@ -329,6 +342,7 @@ def parse_display_choice(display_value: str) -> Tuple[Optional[str], str]:
             return None, lab
     return None, s
 
+
 def on_addr_choice_display_change():
     display_val = st.session_state.get("addr_choice_display", "")
     area, label = parse_display_choice(display_val)
@@ -336,6 +350,7 @@ def on_addr_choice_display_change():
     if area:
         st.session_state.detected_area = area
         st.session_state.area_locked = True
+
 
 # ---------------------------
 # DVF local: load + normalize (incl. "appartementement" fix)
@@ -348,17 +363,15 @@ def normalize_type_local(x: Any) -> str:
     s = s.replace("appartemnt", "appartement")
     s = s.replace("apt", "appartement")
 
-    # variations possibles DVF
     if "appart" in s:
         return "Appartement"
     if "maison" in s:
         return "Maison"
-
-    # fallback
     return "Autre"
 
+
 @st.cache_data(ttl=6 * 60 * 60, show_spinner=False)
-def load_dvf_local() -> pd.DataFrame:
+def load_dvf_local(_bust: str = DVF_CACHE_BUSTER) -> pd.DataFrame:
     if not DVF_LOCAL_PATH.exists():
         return pd.DataFrame()
 
@@ -377,6 +390,7 @@ def load_dvf_local() -> pd.DataFrame:
     df = df[(df["valeur_fonciere"] > 1000) & (df["surface_reelle_bati"] >= 10)]
     return df
 
+
 def dvf_select_similaires(
     df_all: pd.DataFrame,
     lat: float,
@@ -394,18 +408,16 @@ def dvf_select_similaires(
     if pd.isna(max_date):
         return pd.DataFrame(), 0
 
-   cutoff = max_date - pd.Timedelta(days=365)
-   df = df_all[df_all["date_mutation"] >= cutoff].copy()
+    cutoff = max_date - pd.Timedelta(days=365)
+    df = df_all[df_all["date_mutation"] >= cutoff].copy()
     if df.empty:
         return pd.DataFrame(), 0
 
-    # ✅ Renormalise au moment du filtrage (important si parquet hétérogène)
+    # ✅ Renormalise au moment du filtrage (si parquet hétérogène)
     df["type_local"] = df["type_local"].apply(normalize_type_local)
 
     # ✅ STRICT type (jamais de mélange)
     df = df[df["type_local"] == bien_type].copy()
-    if df.empty:
-        return pd.DataFrame(), 0
     if df.empty:
         return pd.DataFrame(), 0
 
@@ -446,7 +458,6 @@ def dvf_select_similaires(
             df_s["prix_m2"] = df_s["valeur_fonciere"] / df_s["surface_reelle_bati"]
             df_s = df_s.replace([np.inf, -np.inf], np.nan).dropna(subset=["prix_m2"])
 
-            # trim outliers if enough
             if len(df_s) >= 10:
                 q10 = df_s["prix_m2"].quantile(0.10)
                 q90 = df_s["prix_m2"].quantile(0.90)
@@ -466,9 +477,11 @@ def dvf_select_similaires(
         tol = tolerances[-1]
         low = surface * (1 - tol)
         high = surface * (1 + tol)
+
         df_fb = df[df["distance_m"] <= rad].copy()
         df_fb["type_local"] = df_fb["type_local"].apply(normalize_type_local)
         df_fb = df_fb[df_fb["type_local"] == bien_type].copy()
+
         df_fb = df_fb[(df_fb["surface_reelle_bati"] >= low) & (df_fb["surface_reelle_bati"] <= high)].copy()
         if df_fb.empty:
             return pd.DataFrame(), 0
@@ -479,6 +492,7 @@ def dvf_select_similaires(
 
     best = best.sort_values(["distance_m", "date_mutation"], ascending=[True, False]).copy()
     return best, used_radius
+
 
 def reliability_and_weight(n: int) -> Tuple[str, float]:
     if n > 15:
@@ -491,8 +505,8 @@ def reliability_and_weight(n: int) -> Tuple[str, float]:
         return "🟠 Modérée", 0.50
     return "🔴 Faible", 0.0
 
+
 def target_band_pct(label: str) -> float:
-    # full width percentage around center
     if "Très élevée" in label:
         return 0.06  # ±3%
     if "Élevée" in label:
@@ -501,16 +515,18 @@ def target_band_pct(label: str) -> float:
         return 0.08  # ±4%
     if "Modérée" in label:
         return 0.10  # ±5%
-    return 0.14      # fallback (not used if low)
+    return 0.14
+
 
 def abs_band_caps(bien_type: str) -> Tuple[float, float]:
-    # min/max FULL width caps (in euros)
     if bien_type == "Appartement":
         return 6000.0, 12000.0
     return 8000.0, 18000.0
 
+
 def clamp(x: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, x))
+
 
 # ---------------------------
 # Header
@@ -529,6 +545,14 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown("<hr/>", unsafe_allow_html=True)
+
+# Cache tools
+with st.expander("🧹 Outils (debug)", expanded=False):
+    if st.button("Vider le cache Streamlit"):
+        st.cache_data.clear()
+        st.success("Cache vidé. Relance en cours…")
+        st.rerun()
+    st.caption(f"DVF cache buster: {DVF_CACHE_BUSTER}")
 
 # ---------------------------
 # Step 1
@@ -841,6 +865,7 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
 
                 # HARD ENFORCE type again (never show wrong type)
                 if not df_local.empty:
+                    df_local["type_local"] = df_local["type_local"].apply(normalize_type_local)
                     df_local = df_local[df_local["type_local"] == st.session_state.bien_type].copy()
 
                 # De-dup preview
@@ -868,7 +893,6 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                     opt_min, opt_max = algo_min, algo_max
                     note_guardrail = "Pas assez de comparables stricts sur 12 mois : la fourchette reste proche de l’estimation immédiate."
                 else:
-                    # DVF band from quantiles
                     q_low, q_high = 0.25, 0.75
                     dvf_m2_low = float(df_local["prix_m2"].quantile(q_low))
                     dvf_m2_high = float(df_local["prix_m2"].quantile(q_high))
@@ -876,32 +900,25 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                     dvf_min = dvf_m2_low * float(st.session_state.surface)
                     dvf_max = dvf_m2_high * float(st.session_state.surface)
 
-                    # Hybrid on bounds
                     opt_min = poids_dvf * dvf_min + (1 - poids_dvf) * algo_min
                     opt_max = poids_dvf * dvf_max + (1 - poids_dvf) * algo_max
 
-                    # Force "optimized" narrower and not weird
-                    # 1) width target by reliability
                     band_pct = target_band_pct(fiabilite_label)
                     full_width_target = max(1.0, ((opt_min + opt_max) / 2.0) * band_pct)
 
-                    # 2) absolute caps by type
                     abs_min_cap, abs_max_cap = abs_band_caps(st.session_state.bien_type)
                     full_width_target = clamp(full_width_target, abs_min_cap, abs_max_cap)
 
-                    # 3) never wider than initial & make it meaningfully tighter
                     full_width_target = min(full_width_target, algo_width * 0.85)
 
                     c = (opt_min + opt_max) / 2.0
                     opt_min = c - full_width_target / 2.0
                     opt_max = c + full_width_target / 2.0
 
-                    # 4) Clamp close to algo range (avoid jumps)
                     slack = algo_width * 0.12
                     opt_min = max(opt_min, algo_min - slack)
                     opt_max = min(opt_max, algo_max + slack)
 
-                    # 5) If DVF center far from algo center, damp
                     opt_center = (opt_min + opt_max) / 2.0
                     ratio = opt_center / max(1.0, algo_center)
                     if ratio > 1.20 or ratio < 0.80:
@@ -912,12 +929,15 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
 
                 # Build preview (vague)
                 preview_records: List[Dict[str, Any]] = []
-                                # ✅ Ultimate guardrail: on n'affiche que le type demandé
+
+                # ✅ Ultimate guardrail: on n'affiche que le type demandé + re-normalise
                 if not df_local.empty:
                     df_local["type_local"] = df_local["type_local"].apply(normalize_type_local)
                     df_local = df_local[df_local["type_local"] == st.session_state.bien_type].copy()
 
+                # re-calc après guardrail
                 nb_similaires = int(len(df_local))
+
                 if nb_similaires > 0:
                     prev = df_local.sort_values(["distance_m", "date_mutation"], ascending=[True, False]).head(5)
                     for _, r in prev.iterrows():
@@ -936,7 +956,6 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
 
                 progress_step(90, "🔍 Vérification de cohérence…", 0.40)
 
-                # enforce minimum UX duration
                 dt = time.time() - t0
                 if dt < MIN_PROGRESS_SECONDS:
                     time.sleep(MIN_PROGRESS_SECONDS - dt)

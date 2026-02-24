@@ -48,8 +48,8 @@ GEOPF_SEARCH_URL = "https://data.geopf.fr/geocodage/search"
 # DVF local (généré par build_dvf_local.py)
 DVF_LOCAL_PATH = Path("data/dvf_local.parquet")
 
-# Cache buster (incrémente si tu veux forcer le reload DVF)
-DVF_CACHE_BUSTER = "v3"
+# Cache buster (change la valeur si tu veux forcer reload DVF via cache)
+DVF_CACHE_BUSTER = "v4"
 
 # ---------------------------
 # Session state
@@ -85,13 +85,25 @@ st.session_state.setdefault("hybrid_done", False)
 st.session_state.setdefault("hybrid_payload", None)
 
 # ---------------------------
-# CSS
+# CSS (FIX ICON FONTS)
 # ---------------------------
 st.markdown(
     f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
-* {{ font-family: 'Poppins', sans-serif !important; }}
+
+/* ✅ Applique Poppins partout SAUF aux polices d'icônes Streamlit */
+*:not(.material-icons):not(.material-symbols-outlined):not(.material-symbols-rounded):not(.material-symbols-sharp) {{
+  font-family: 'Poppins', sans-serif !important;
+}}
+
+/* ✅ Force les icônes à garder leur font */
+.material-icons {{
+  font-family: 'Material Icons' !important;
+}}
+.material-symbols-outlined, .material-symbols-rounded, .material-symbols-sharp {{
+  font-family: 'Material Symbols Outlined' !important;
+}}
 
 .main {{ background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%); }}
 
@@ -353,11 +365,12 @@ def on_addr_choice_display_change():
 
 
 # ---------------------------
-# DVF local: load + normalize (incl. "appartementement" fix)
+# DVF local: load + normalize
 # ---------------------------
 def normalize_type_local(x: Any) -> str:
     s = str(x or "").strip().lower()
     s = s.replace("’", "'")
+    # fixes typos
     s = s.replace("appartementement", "appartement")
     s = s.replace("appartemment", "appartement")
     s = s.replace("appartemnt", "appartement")
@@ -383,6 +396,7 @@ def load_dvf_local(_bust: str = DVF_CACHE_BUSTER) -> pd.DataFrame:
     df["longitude"] = pd.to_numeric(df.get("longitude"), errors="coerce")
     df["latitude"] = pd.to_numeric(df.get("latitude"), errors="coerce")
 
+    # ✅ normalize type
     df["type_local"] = df.get("type_local").apply(normalize_type_local)
 
     df = df.dropna(subset=["date_mutation", "valeur_fonciere", "surface_reelle_bati", "longitude", "latitude", "type_local"])
@@ -401,7 +415,7 @@ def dvf_select_similaires(
     if df_all.empty:
         return pd.DataFrame(), 0
 
-    bien_type = (bien_type or "").strip().title()
+    target_type = (bien_type or "").strip().title()
     surface = float(surface)
 
     max_date = df_all["date_mutation"].max()
@@ -413,11 +427,9 @@ def dvf_select_similaires(
     if df.empty:
         return pd.DataFrame(), 0
 
-    # ✅ Renormalise au moment du filtrage (si parquet hétérogène)
+    # ✅ renormalise & strict type
     df["type_local"] = df["type_local"].apply(normalize_type_local)
-
-    # ✅ STRICT type (jamais de mélange)
-    df = df[df["type_local"] == bien_type].copy()
+    df = df[df["type_local"] == target_type].copy()
     if df.empty:
         return pd.DataFrame(), 0
 
@@ -437,7 +449,7 @@ def dvf_select_similaires(
     df["distance_m"] = dist
 
     radii = [800, 1500, 2500, 3500]
-    tolerances = [0.20, 0.25, 0.35] if bien_type == "Appartement" else [0.25, 0.35, 0.45]
+    tolerances = [0.20, 0.25, 0.35] if target_type == "Appartement" else [0.25, 0.35, 0.45]
     min_needed = 4
 
     best = pd.DataFrame()
@@ -458,6 +470,7 @@ def dvf_select_similaires(
             df_s["prix_m2"] = df_s["valeur_fonciere"] / df_s["surface_reelle_bati"]
             df_s = df_s.replace([np.inf, -np.inf], np.nan).dropna(subset=["prix_m2"])
 
+            # trim outliers if enough
             if len(df_s) >= 10:
                 q10 = df_s["prix_m2"].quantile(0.10)
                 q90 = df_s["prix_m2"].quantile(0.90)
@@ -472,19 +485,17 @@ def dvf_select_similaires(
             break
 
     if best.empty:
-        # fallback: still strict type and reasonable tolerance
+        # fallback strict type only
         rad = radii[-1]
         tol = tolerances[-1]
         low = surface * (1 - tol)
         high = surface * (1 + tol)
 
-        df_fb = df[df["distance_m"] <= rad].copy()
-        df_fb["type_local"] = df_fb["type_local"].apply(normalize_type_local)
-        df_fb = df_fb[df_fb["type_local"] == bien_type].copy()
-
+        df_fb = df[df["distance_m"] <= rad].copy()  # df is already strict type
         df_fb = df_fb[(df_fb["surface_reelle_bati"] >= low) & (df_fb["surface_reelle_bati"] <= high)].copy()
         if df_fb.empty:
             return pd.DataFrame(), 0
+
         df_fb["prix_m2"] = df_fb["valeur_fonciere"] / df_fb["surface_reelle_bati"]
         df_fb = df_fb.replace([np.inf, -np.inf], np.nan).dropna(subset=["prix_m2"])
         df_fb = df_fb.sort_values(["distance_m", "date_mutation"], ascending=[True, False]).head(3)
@@ -546,12 +557,24 @@ st.markdown(
 )
 st.markdown("<hr/>", unsafe_allow_html=True)
 
-# Cache tools
+# ---------------------------
+# Cache tools (fix UI + clear cache)
+# ---------------------------
 with st.expander("🧹 Outils (debug)", expanded=False):
-    if st.button("Vider le cache Streamlit"):
-        st.cache_data.clear()
-        st.success("Cache vidé. Relance en cours…")
-        st.rerun()
+    cols = st.columns([1, 1])
+    with cols[0]:
+        if st.button("Vider le cache Streamlit"):
+            st.cache_data.clear()
+            st.success("Cache vidé. Rechargement…")
+            st.rerun()
+    with cols[1]:
+        if st.button("Forcer reload DVF (cache buster)"):
+            # on change une clé en session pour provoquer un reload + clear cache
+            st.session_state["_dvf_bust_manual"] = str(time.time())
+            st.cache_data.clear()
+            st.success("DVF reload forcé. Rechargement…")
+            st.rerun()
+
     st.caption(f"DVF cache buster: {DVF_CACHE_BUSTER}")
 
 # ---------------------------
@@ -816,28 +839,6 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
         if not (st.session_state.prenom and st.session_state.email and st.session_state.telephone and st.session_state.consent):
             st.error("Il manque une info (ou le consentement).")
         else:
-            st.session_state["lead"] = {
-                "secteur_effectif": effective_area,
-                "secteur_affiche": sector_display,
-                "code_postal": ai.get("postcode", ""),
-                "ville_api": ai.get("city", ""),
-                "prenom": st.session_state.prenom,
-                "email": st.session_state.email,
-                "telephone": st.session_state.telephone,
-                "adresse": geo.get("label", st.session_state.addr_choice),
-                "lat": geo["lat"],
-                "lon": geo["lon"],
-                "bien_type": st.session_state.bien_type,
-                "surface": float(st.session_state.surface),
-                "pieces": int(st.session_state.nb_pieces),
-                "chambres": int(st.session_state.nb_chambres),
-                "etat": st.session_state.etat,
-                "distance_gare_m": res["distance_gare_m"],
-                "quartier": res.get("quartier", ""),
-                "estimation_min_algo": float(res["min"]),
-                "estimation_max_algo": float(res["max"]),
-            }
-
             t0 = time.time()
             progress = st.progress(0, text="🔎 Recherche des ventes comparables (12 mois)…")
 
@@ -847,14 +848,12 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
 
             try:
                 progress_step(10, "📦 Chargement de la base DVF locale…", 0.35)
-                df_all = load_dvf_local()
+                df_all = load_dvf_local(st.session_state.get("_dvf_bust_manual", DVF_CACHE_BUSTER))
                 if df_all.empty:
                     st.warning("⚠️ Base DVF locale introuvable (fichier parquet manquant).")
                     st.stop()
 
-                progress_step(30, "🧠 Analyse du secteur et préparation…", 0.35)
-
-                progress_step(55, "🏡 Sélection de biens comparables (type + surface + rayon)…", 0.45)
+                progress_step(55, "🏡 Sélection de biens comparables (type + surface + rayon)…", 0.55)
                 df_local, used_radius = dvf_select_similaires(
                     df_all=df_all,
                     lat=float(geo["lat"]),
@@ -863,10 +862,16 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                     surface=float(st.session_state.surface),
                 )
 
-                # HARD ENFORCE type again (never show wrong type)
+                # ✅ ULTIMATE GUARDRAIL (aucun affichage si mauvais type)
                 if not df_local.empty:
                     df_local["type_local"] = df_local["type_local"].apply(normalize_type_local)
                     df_local = df_local[df_local["type_local"] == st.session_state.bien_type].copy()
+
+                # ✅ Si malgré tout il reste des mauvais types -> on drop tout (plutôt que d'afficher une incohérence)
+                if not df_local.empty:
+                    bad = df_local[df_local["type_local"] != st.session_state.bien_type]
+                    if len(bad) > 0:
+                        df_local = pd.DataFrame()  # sécurité
 
                 # De-dup preview
                 if not df_local.empty:
@@ -875,8 +880,9 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                         keep="first",
                     )
 
-                progress_step(75, "📊 Calcul de la fourchette optimisée…", 0.50)
+                progress_step(75, "📊 Calcul de la fourchette optimisée…", 0.65)
 
+                # algo
                 algo_min = float(res["min"])
                 algo_max = float(res["max"])
                 algo_center = (algo_min + algo_max) / 2.0
@@ -900,15 +906,16 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                     dvf_min = dvf_m2_low * float(st.session_state.surface)
                     dvf_max = dvf_m2_high * float(st.session_state.surface)
 
+                    # hybrid
                     opt_min = poids_dvf * dvf_min + (1 - poids_dvf) * algo_min
                     opt_max = poids_dvf * dvf_max + (1 - poids_dvf) * algo_max
 
+                    # tighten band
                     band_pct = target_band_pct(fiabilite_label)
                     full_width_target = max(1.0, ((opt_min + opt_max) / 2.0) * band_pct)
 
                     abs_min_cap, abs_max_cap = abs_band_caps(st.session_state.bien_type)
                     full_width_target = clamp(full_width_target, abs_min_cap, abs_max_cap)
-
                     full_width_target = min(full_width_target, algo_width * 0.85)
 
                     c = (opt_min + opt_max) / 2.0
@@ -919,6 +926,7 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                     opt_min = max(opt_min, algo_min - slack)
                     opt_max = min(opt_max, algo_max + slack)
 
+                    # damp if too far from algo center
                     opt_center = (opt_min + opt_max) / 2.0
                     ratio = opt_center / max(1.0, algo_center)
                     if ratio > 1.20 or ratio < 0.80:
@@ -927,17 +935,8 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                         opt_min = (1 - pull) * opt_min + pull * algo_min
                         opt_max = (1 - pull) * opt_max + pull * algo_max
 
-                # Build preview (vague)
+                # preview (vague) — strict type already
                 preview_records: List[Dict[str, Any]] = []
-
-                # ✅ Ultimate guardrail: on n'affiche que le type demandé + re-normalise
-                if not df_local.empty:
-                    df_local["type_local"] = df_local["type_local"].apply(normalize_type_local)
-                    df_local = df_local[df_local["type_local"] == st.session_state.bien_type].copy()
-
-                # re-calc après guardrail
-                nb_similaires = int(len(df_local))
-
                 if nb_similaires > 0:
                     prev = df_local.sort_values(["distance_m", "date_mutation"], ascending=[True, False]).head(5)
                     for _, r in prev.iterrows():
@@ -954,14 +953,15 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                             "dist": int(round(float(r.get("distance_m", 0)) / 100.0) * 100),
                         })
 
-                progress_step(90, "🔍 Vérification de cohérence…", 0.40)
+                progress_step(90, "🔍 Vérification de cohérence…", 0.45)
 
+                # enforce minimum UX duration
                 dt = time.time() - t0
                 if dt < MIN_PROGRESS_SECONDS:
                     time.sleep(MIN_PROGRESS_SECONDS - dt)
 
                 progress.progress(100, text="✅ Terminé.")
-                time.sleep(0.20)
+                time.sleep(0.15)
 
                 st.session_state.hybrid_payload = {
                     "fiabilite_label": fiabilite_label,

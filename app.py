@@ -49,7 +49,7 @@ GEOPF_SEARCH_URL = "https://data.geopf.fr/geocodage/search"
 DVF_LOCAL_PATH = Path("data/dvf_local.parquet")
 
 # Cache buster (change si besoin)
-DVF_CACHE_BUSTER = "v5"
+DVF_CACHE_BUSTER = "v6"
 
 # ---------------------------
 # Session state

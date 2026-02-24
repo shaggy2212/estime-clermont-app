@@ -393,7 +393,8 @@ def load_dvf_local(_bust: str = DVF_CACHE_BUSTER) -> pd.DataFrame:
     df["longitude"] = pd.to_numeric(df.get("longitude"), errors="coerce")
     df["latitude"] = pd.to_numeric(df.get("latitude"), errors="coerce")
 
-    df["type_local"] = df.get("type_local").apply(normalize_type_local)
+    df["type_local_raw"] = df.get("type_local")
+    df["type_local"] = df["type_local_raw"].apply(normalize_type_local)
 
     df = df.dropna(subset=["date_mutation", "valeur_fonciere", "surface_reelle_bati", "longitude", "latitude", "type_local"])
     df = df[df["type_local"].isin(["Maison", "Appartement"])]
@@ -874,6 +875,32 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
 
                 progress_step(55, "🏡 Sélection de comparables cohérents (type + surface)…", 0.70)
                 df_local, used_radius, used_tol = dvf_select_similaires_strict(
+                    # --- DEBUG DVF (uniquement si ?debug=1) ---
+if DEBUG:
+    st.markdown("### 🧪 Debug DVF (type_local)")
+    st.write("Type demandé (formulaire) :", st.session_state.bien_type)
+
+    # Stats globales 12 mois
+    max_date_dbg = df_all["date_mutation"].max()
+    cutoff_dbg = max_date_dbg - pd.Timedelta(days=365)
+    df12 = df_all[df_all["date_mutation"] >= cutoff_dbg].copy()
+
+    st.write("Valeurs RAW (12 mois) :")
+    if "type_local_raw" in df12.columns:
+        st.write(df12["type_local_raw"].astype(str).str.strip().value_counts().head(30))
+    else:
+        st.warning("Colonne type_local_raw absente (tu n'as pas ajouté le RAW).")
+
+    st.write("Valeurs NORMALISÉES (12 mois) :")
+    st.write(df12["type_local"].value_counts())
+
+    # Stats sur les comparables retournés
+    st.write("Comparables RETOURNÉS : n =", len(df_local))
+    if not df_local.empty:
+        st.write("value_counts type_local :", df_local["type_local"].value_counts())
+        st.write("surface min/max :", float(df_local["surface_reelle_bati"].min()), "/", float(df_local["surface_reelle_bati"].max()))
+        cols_show = [c for c in ["type_local_raw","type_local","surface_reelle_bati","valeur_fonciere","date_mutation","nom_commune","distance_m"] if c in df_local.columns]
+        st.dataframe(df_local[cols_show].head(25), use_container_width=True)
                     df_all=df_all,
                     lat=float(geo["lat"]),
                     lon=float(geo["lon"]),

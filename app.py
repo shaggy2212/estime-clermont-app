@@ -875,12 +875,18 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
 
                 progress_step(55, "🏡 Sélection de comparables cohérents (type + surface)…", 0.70)
                 df_local, used_radius, used_tol = dvf_select_similaires_strict(
-                    # --- DEBUG DVF (uniquement si ?debug=1) ---
+    df_all=df_all,
+    lat=float(geo["lat"]),
+    lon=float(geo["lon"]),
+    bien_type=st.session_state.bien_type,
+    surface=float(st.session_state.surface),
+)
+
+# --- DEBUG DVF (uniquement si ?debug=1) ---
 if DEBUG:
     st.markdown("### 🧪 Debug DVF (type_local)")
     st.write("Type demandé (formulaire) :", st.session_state.bien_type)
 
-    # Stats globales 12 mois
     max_date_dbg = df_all["date_mutation"].max()
     cutoff_dbg = max_date_dbg - pd.Timedelta(days=365)
     df12 = df_all[df_all["date_mutation"] >= cutoff_dbg].copy()
@@ -892,196 +898,163 @@ if DEBUG:
         st.warning("Colonne type_local_raw absente (tu n'as pas ajouté le RAW).")
 
     st.write("Valeurs NORMALISÉES (12 mois) :")
-    st.write(df12["type_local"].value_counts())
+    if "type_local" in df12.columns:
+        st.write(df12["type_local"].value_counts())
+    else:
+        st.warning("Colonne type_local absente.")
 
-    # Stats sur les comparables retournés
     st.write("Comparables RETOURNÉS : n =", len(df_local))
     if not df_local.empty:
         st.write("value_counts type_local :", df_local["type_local"].value_counts())
-        st.write("surface min/max :", float(df_local["surface_reelle_bati"].min()), "/", float(df_local["surface_reelle_bati"].max()))
-        cols_show = [c for c in ["type_local_raw","type_local","surface_reelle_bati","valeur_fonciere","date_mutation","nom_commune","distance_m"] if c in df_local.columns]
+        st.write(
+            "surface min/max :",
+            float(df_local["surface_reelle_bati"].min()),
+            "/",
+            float(df_local["surface_reelle_bati"].max()),
+        )
+        cols_show = [
+            c
+            for c in [
+                "type_local_raw",
+                "type_local",
+                "surface_reelle_bati",
+                "valeur_fonciere",
+                "date_mutation",
+                "nom_commune",
+                "distance_m",
+            ]
+            if c in df_local.columns
+        ]
         st.dataframe(df_local[cols_show].head(25), use_container_width=True)
-                    df_all=df_all,
-                    lat=float(geo["lat"]),
-                    lon=float(geo["lon"]),
-                    bien_type=st.session_state.bien_type,
-                    surface=float(st.session_state.surface),
-                )
 
-                # ✅ ULTIMATE ENFORCEMENT (zéro incohérence autorisée)
-                if not df_local.empty:
-                    df_local["type_local"] = df_local["type_local"].apply(normalize_type_local)
-                    df_local = df_local[df_local["type_local"] == st.session_state.bien_type].copy()
+# ✅ ULTIMATE ENFORCEMENT (zéro incohérence autorisée)
+if not df_local.empty:
+    df_local["type_local"] = df_local["type_local"].apply(normalize_type_local)
 
-                    tol = float(used_tol or (0.35 if st.session_state.bien_type == "Appartement" else 0.45))
-                    s0 = float(st.session_state.surface)
-                    lo = s0 * (1 - tol)
-                    hi = s0 * (1 + tol)
-                    df_local = df_local[(df_local["surface_reelle_bati"] >= lo) & (df_local["surface_reelle_bati"] <= hi)].copy()
+    # IMPORTANT: compare sur la version normalisée du type demandé
+    target_type = normalize_type_local(st.session_state.bien_type)
+    df_local = df_local[df_local["type_local"] == target_type].copy()
 
-                # De-dup preview
-                if not df_local.empty:
-                    df_local = df_local.drop_duplicates(
-                        subset=["date_mutation", "valeur_fonciere", "surface_reelle_bati", "type_local", "nom_commune"],
-                        keep="first",
-                    )
+    # re-filtre surfaces sur la tol utilisée
+    tol = float(used_tol or (0.35 if target_type == "Appartement" else 0.45))
+    s0 = float(st.session_state.surface)
+    lo = s0 * (1 - tol)
+    hi = s0 * (1 + tol)
+    df_local = df_local[(df_local["surface_reelle_bati"] >= lo) & (df_local["surface_reelle_bati"] <= hi)].copy()
 
-                progress_step(75, "📊 Calcul de la fourchette optimisée…", 0.75)
+# De-dup preview
+if not df_local.empty:
+    df_local = df_local.drop_duplicates(
+        subset=["date_mutation", "valeur_fonciere", "surface_reelle_bati", "type_local", "nom_commune"],
+        keep="first",
+    )
 
-                algo_min = float(res["min"])
-                algo_max = float(res["max"])
-                algo_center = (algo_min + algo_max) / 2.0
-                algo_width = algo_max - algo_min
+progress_step(75, "📊 Calcul de la fourchette optimisée…", 0.75)
 
-                nb_similaires = int(len(df_local))
-                max_date = df_all["date_mutation"].max()
-                last_update = max_date.strftime("%B %Y") if pd.notna(max_date) else "—"
+algo_min = float(res["min"])
+algo_max = float(res["max"])
+algo_center = (algo_min + algo_max) / 2.0
+algo_width = algo_max - algo_min
 
-                fiabilite_label, poids_dvf = reliability_and_weight(nb_similaires)
-                note_guardrail = ""
+nb_similaires = int(len(df_local))
+max_date = df_all["date_mutation"].max()
+last_update = max_date.strftime("%B %Y") if pd.notna(max_date) else "—"
 
-                if nb_similaires < 2:
-                    opt_min, opt_max = algo_min, algo_max
-                    note_guardrail = "Pas assez de comparables STRICTS sur 12 mois : on reste proche de l’estimation immédiate (pour éviter une incohérence)."
-                else:
-                    # ensure prix_m2 exists
-                    if "prix_m2" not in df_local.columns:
-                        df_local["prix_m2"] = df_local["valeur_fonciere"] / df_local["surface_reelle_bati"]
-                        df_local = df_local.replace([np.inf, -np.inf], np.nan).dropna(subset=["prix_m2"])
+fiabilite_label, poids_dvf = reliability_and_weight(nb_similaires)
+note_guardrail = ""
 
-                    dvf_m2_low = float(df_local["prix_m2"].quantile(0.25))
-                    dvf_m2_high = float(df_local["prix_m2"].quantile(0.75))
+if nb_similaires < 2:
+    opt_min, opt_max = algo_min, algo_max
+    note_guardrail = "Pas assez de comparables STRICTS sur 12 mois : on reste proche de l’estimation immédiate (pour éviter une incohérence)."
+else:
+    # ensure prix_m2 exists
+    if "prix_m2" not in df_local.columns:
+        df_local["prix_m2"] = df_local["valeur_fonciere"] / df_local["surface_reelle_bati"]
+        df_local = df_local.replace([np.inf, -np.inf], np.nan).dropna(subset=["prix_m2"])
 
-                    dvf_min = dvf_m2_low * float(st.session_state.surface)
-                    dvf_max = dvf_m2_high * float(st.session_state.surface)
+    dvf_m2_low = float(df_local["prix_m2"].quantile(0.25))
+    dvf_m2_high = float(df_local["prix_m2"].quantile(0.75))
 
-                    opt_min = poids_dvf * dvf_min + (1 - poids_dvf) * algo_min
-                    opt_max = poids_dvf * dvf_max + (1 - poids_dvf) * algo_max
+    dvf_min = dvf_m2_low * float(st.session_state.surface)
+    dvf_max = dvf_m2_high * float(st.session_state.surface)
 
-                    band_pct = target_band_pct(fiabilite_label)
-                    full_width_target = max(1.0, ((opt_min + opt_max) / 2.0) * band_pct)
+    opt_min = poids_dvf * dvf_min + (1 - poids_dvf) * algo_min
+    opt_max = poids_dvf * dvf_max + (1 - poids_dvf) * algo_max
 
-                    abs_min_cap, abs_max_cap = abs_band_caps(st.session_state.bien_type)
-                    full_width_target = clamp(full_width_target, abs_min_cap, abs_max_cap)
-                    full_width_target = min(full_width_target, algo_width * 0.82)  # encore plus serré
+    band_pct = target_band_pct(fiabilite_label)
+    full_width_target = max(1.0, ((opt_min + opt_max) / 2.0) * band_pct)
 
-                    c = (opt_min + opt_max) / 2.0
-                    opt_min = c - full_width_target / 2.0
-                    opt_max = c + full_width_target / 2.0
+    abs_min_cap, abs_max_cap = abs_band_caps(st.session_state.bien_type)
+    full_width_target = clamp(full_width_target, abs_min_cap, abs_max_cap)
+    full_width_target = min(full_width_target, algo_width * 0.82)  # encore plus serré
 
-                    slack = algo_width * 0.10
-                    opt_min = max(opt_min, algo_min - slack)
-                    opt_max = min(opt_max, algo_max + slack)
+    c = (opt_min + opt_max) / 2.0
+    opt_min = c - full_width_target / 2.0
+    opt_max = c + full_width_target / 2.0
 
-                    opt_center = (opt_min + opt_max) / 2.0
-                    ratio = opt_center / max(1.0, algo_center)
-                    if ratio > 1.18 or ratio < 0.82:
-                        note_guardrail = "Marché hétérogène : on tempère l’optimisation pour éviter une incohérence."
-                        pull = 0.45
-                        opt_min = (1 - pull) * opt_min + pull * algo_min
-                        opt_max = (1 - pull) * opt_max + pull * algo_max
+    slack = algo_width * 0.10
+    opt_min = max(opt_min, algo_min - slack)
+    opt_max = min(opt_max, algo_max + slack)
 
-                preview_records: List[Dict[str, Any]] = []
-                if nb_similaires > 0:
-                    prev = df_local.sort_values(["distance_m", "date_mutation"], ascending=[True, False]).head(5)
-                    for _, r in prev.iterrows():
-                        try:
-                            mois = pd.to_datetime(r["date_mutation"]).strftime("%m/%Y")
-                        except Exception:
-                            mois = "—"
-                        preview_records.append({
-                            "type_local": str(r.get("type_local", "")),
-                            "surface": int(round(float(r.get("surface_reelle_bati", 0)))),
-                            "prix": float(r.get("valeur_fonciere", 0)),
-                            "mois": mois,
-                            "commune": str(r.get("nom_commune", "Secteur")),
-                            "dist": int(round(float(r.get("distance_m", 0)) / 100.0) * 100),
-                        })
+    opt_center = (opt_min + opt_max) / 2.0
+    ratio = opt_center / max(1.0, algo_center)
+    if ratio > 1.18 or ratio < 0.82:
+        note_guardrail = "Marché hétérogène : on tempère l’optimisation pour éviter une incohérence."
+        pull = 0.45
+        opt_min = (1 - pull) * opt_min + pull * algo_min
+        opt_max = (1 - pull) * opt_max + pull * algo_max
 
-                progress_step(90, "🔍 Vérification de cohérence…", 0.55)
-
-                dt = time.time() - t0
-                if dt < MIN_PROGRESS_SECONDS:
-                    time.sleep(MIN_PROGRESS_SECONDS - dt)
-
-                progress.progress(100, text="✅ Terminé.")
-                time.sleep(0.15)
-
-                st.session_state.hybrid_payload = {
-                    "fiabilite_label": fiabilite_label,
-                    "nb_similaires": nb_similaires,
-                    "poids_dvf": float(poids_dvf),
-                    "opt_min": float(opt_min),
-                    "opt_max": float(opt_max),
-                    "last_update": last_update,
-                    "used_radius": int(used_radius),
-                    "used_tol": float(used_tol),
-                    "note_guardrail": note_guardrail,
-                    "similaires_preview": preview_records,
-                    "bien_type": st.session_state.bien_type,
-                }
-                st.session_state.hybrid_done = True
-
-            finally:
-                progress.empty()
-
-            st.success(f"Merci {st.session_state.prenom} ✅ Je te contacte rapidement pour affiner et te donner des comparables précis.")
-            st.rerun()
-
-    # Render optimized
-    if st.session_state.hybrid_done and st.session_state.hybrid_payload:
-        hp = st.session_state.hybrid_payload
-
-        st.markdown("<hr/>", unsafe_allow_html=True)
-        st.markdown("## 💎 Fourchette de valeur optimisée")
-
-        st.markdown(
-            f"<div class='metric'><p class='k'>Valeur estimée</p>"
-            f"<p class='v'>{eur(hp['opt_min'])} – {eur(hp['opt_max'])}</p></div>",
-            unsafe_allow_html=True,
+preview_records: List[Dict[str, Any]] = []
+if nb_similaires > 0:
+    prev = df_local.sort_values(["distance_m", "date_mutation"], ascending=[True, False]).head(5)
+    for _, r in prev.iterrows():
+        try:
+            mois = pd.to_datetime(r["date_mutation"]).strftime("%m/%Y")
+        except Exception:
+            mois = "—"
+        preview_records.append(
+            {
+                "type_local": str(r.get("type_local", "")),
+                "surface": int(round(float(r.get("surface_reelle_bati", 0)))),
+                "prix": float(r.get("valeur_fonciere", 0)),
+                "mois": mois,
+                "commune": str(r.get("nom_commune", "Secteur")),
+                "dist": int(round(float(r.get("distance_m", 0)) / 100.0) * 100),
+            }
         )
 
-        st.markdown(
-            f"<div class='card soft'>"
-            f"<b>Indice de fiabilité :</b> {hp['fiabilite_label']}<br>"
-            f"Basé sur <b>{hp['nb_similaires']}</b> biens comparables STRICTS sur 12 mois "
-            f"(rayon max : {hp.get('used_radius','—')} m)<br><br>"
-            f"Basé sur <b>plus d’une centaine de ventes officielles récentes</b> "
-            f"(DVF – data.gouv.fr, dernière mise à jour : {hp['last_update']})"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
+progress_step(90, "🔍 Vérification de cohérence…", 0.55)
 
-        if hp.get("note_guardrail"):
-            st.markdown(
-                f"<div class='card accent-top'><b>Note :</b> {hp['note_guardrail']}</div>",
-                unsafe_allow_html=True,
-            )
+dt = time.time() - t0
+if dt < MIN_PROGRESS_SECONDS:
+    time.sleep(MIN_PROGRESS_SECONDS - dt)
 
-        st.markdown(
-            "<div class='card'>"
-            "<b>Important :</b><br><br>"
-            "Cette estimation est basée sur les données officielles du marché.<br><br>"
-            "Toutefois, aucun algorithme ne peut évaluer :<br>"
-            "– l’état réel du bien<br>"
-            "– les travaux réalisés<br>"
-            "– l’isolation<br>"
-            "– les nuisances<br>"
-            "– l’exposition<br>"
-            "– l’extérieur / terrain<br><br>"
-            "<b>Pour obtenir une estimation précise, une visite du bien est indispensable.</b><br><br>"
-            "Je vous contacte personnellement pour affiner cette estimation et définir "
-            "la meilleure stratégie de mise en vente."
-            "</div>",
-            unsafe_allow_html=True,
-        )
+progress.progress(100, text="✅ Terminé.")
+time.sleep(0.15)
 
-        if hp.get("similaires_preview"):
-            st.markdown("<div class='card accent-top'>", unsafe_allow_html=True)
-            st.markdown("### 🧾 Exemples de comparables (localisation volontairement vague)")
-            for r in hp["similaires_preview"]:
-                st.markdown(
-                    f"- **{r['type_local']}** · **{r['surface']} m²** · **{eur(r['prix'])}** · "
-                    f"**{r['mois']}** · **{r['commune']}** (~{r['dist']} m)"
-                )
-            st.markdown("</div>", unsafe_allow_html=True)
+st.session_state.hybrid_payload = {
+    "fiabilite_label": fiabilite_label,
+    "nb_similaires": nb_similaires,
+    "poids_dvf": float(poids_dvf),
+    "opt_min": float(opt_min),
+    "opt_max": float(opt_max),
+    "last_update": last_update,
+    "used_radius": int(used_radius),
+    "used_tol": float(used_tol),
+    "note_guardrail": note_guardrail,
+    "similaires_preview": preview_records,
+    "bien_type": st.session_state.bien_type,
+}
+st.session_state.hybrid_done = True
+
+
+
+
+
+
+
+
+
+
+                    
+                  

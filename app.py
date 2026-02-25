@@ -49,7 +49,7 @@ GEOPF_SEARCH_URL = "https://data.geopf.fr/geocodage/search"
 DVF_LOCAL_PATH = Path("data/dvf_local.parquet")
 
 # Cache buster (change si besoin)
-DVF_CACHE_BUSTER = "v6"
+DVF_CACHE_BUSTER = "v7"
 
 # ---------------------------
 # Session state
@@ -58,18 +58,17 @@ st.session_state.setdefault("step", 1)
 st.session_state.setdefault("geo", None)
 st.session_state.setdefault("res", None)
 
-# Snapshot verrouillé (anti incohérences Step2)
-st.session_state.setdefault("bien_snapshot", None)
-
 # Step 1 inputs
 st.session_state.setdefault("area_name", AUTO_AREA)
 st.session_state.setdefault("area_locked", False)
 st.session_state.setdefault("detected_area", DEFAULT_AREA)
-st.session_state.setdefault("bien_type", "Maison")
-st.session_state.setdefault("surface", 100.0)
+
+# IMPORTANT: on garde des valeurs cohérentes (types stables)
+st.session_state.setdefault("bien_type", "Maison")         # "Maison" ou "Appartement"
+st.session_state.setdefault("surface", 100.0)              # float
 st.session_state.setdefault("etat", "Moyen")
-st.session_state.setdefault("nb_pieces", 3)
-st.session_state.setdefault("nb_chambres", 2)
+st.session_state.setdefault("nb_pieces", 3)                # int
+st.session_state.setdefault("nb_chambres", 2)              # int
 st.session_state.setdefault("addr_typed", "")
 st.session_state.setdefault("addr_choice", "")
 st.session_state.setdefault("addr_choice_display", "")
@@ -86,6 +85,15 @@ st.session_state.setdefault("show_explain", False)
 # Hybrid storage
 st.session_state.setdefault("hybrid_done", False)
 st.session_state.setdefault("hybrid_payload", None)
+
+# ---------------------------
+# Debug mode: only when ?debug=1
+# ---------------------------
+DEBUG = False
+try:
+    DEBUG = (st.query_params.get("debug", "0") == "1")
+except Exception:
+    DEBUG = False
 
 # ---------------------------
 # CSS (stable + icons fix)
@@ -150,7 +158,7 @@ h3 {{
   box-shadow: 0 12px 28px rgba(255, 126, 121, 0.28);
 }}
 .metric .k {{ font-size:0.86rem; opacity:0.95; margin:0; }}
-.metric .v {{ font-size:1.65rem; font-weight:850; margin:0.12rem 0 0 0; letter-spacing:-0.02em; }}
+.metric .v {{ font-size:1.55rem; font-weight:850; margin:0.12rem 0 0 0; letter-spacing:-0.02em; }}
 
 hr {{ border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 1.3rem 0; }}
 
@@ -191,7 +199,7 @@ hr {{ border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 1.3rem 0; }}
 )
 
 # ---------------------------
-# Helpers
+# Helpers (general)
 # ---------------------------
 def haversine_m(lat1, lon1, lat2, lon2) -> float:
     R = 6371000.0
@@ -205,6 +213,10 @@ def haversine_m(lat1, lon1, lat2, lon2) -> float:
 
 def norm(s: str) -> str:
     return (s or "").strip().lower().replace("’", "'")
+
+
+def eur(x: float) -> str:
+    return f"{x:,.0f} €".replace(",", " ")
 
 
 def normalize_query_to_area(q: str, city: str, postcode: str) -> str:
@@ -227,6 +239,31 @@ def get_effective_area() -> Tuple[str, Dict[str, str]]:
     return DEFAULT_AREA, AREAS[DEFAULT_AREA]
 
 
+def parse_display_choice(display_value: str) -> Tuple[Optional[str], str]:
+    s = (display_value or "").strip()
+    for sep in [" — ", "—", " - ", "-"]:
+        if sep in s:
+            a, lab = s.split(sep, 1)
+            a = a.strip()
+            lab = lab.strip()
+            if a in AREAS:
+                return a, lab
+            return None, lab
+    return None, s
+
+
+def on_addr_choice_display_change():
+    display_val = st.session_state.get("addr_choice_display", "")
+    area, label = parse_display_choice(display_val)
+    st.session_state.addr_choice = label
+    if area:
+        st.session_state.detected_area = area
+        st.session_state.area_locked = True
+
+
+# ---------------------------
+# GeoPlateforme (IGN)
+# ---------------------------
 @st.cache_data(ttl=60 * 60, show_spinner=False)
 def geopf_completion(text: str, postcode: str, city: str, max_resp: int = 7) -> List[str]:
     if not text or len(text.strip()) < 3:
@@ -254,6 +291,7 @@ def geopf_completion(text: str, postcode: str, city: str, max_resp: int = 7) -> 
             continue
         out.append(label)
 
+    # dedup
     seen = set()
     dedup = []
     for lab in out:
@@ -284,6 +322,9 @@ def geopf_geocode_one(query: str) -> Optional[Dict[str, Any]]:
     return {"lat": lat, "lon": lon, "label": props.get("label") or query}
 
 
+# ---------------------------
+# Estimation (step 1)
+# ---------------------------
 def quartier_from_distance(distance_m: float) -> str:
     if distance_m < 500:
         return "Nord (Gare)"
@@ -341,35 +382,16 @@ def estimate_price(
     }
 
 
-def eur(x: float) -> str:
-    return f"{x:,.0f} €".replace(",", " ")
-
-
-def parse_display_choice(display_value: str) -> Tuple[Optional[str], str]:
-    s = (display_value or "").strip()
-    for sep in [" — ", "—", " - ", "-"]:
-        if sep in s:
-            a, lab = s.split(sep, 1)
-            a = a.strip()
-            lab = lab.strip()
-            if a in AREAS:
-                return a, lab
-            return None, lab
-    return None, s
-
-
-def on_addr_choice_display_change():
-    display_val = st.session_state.get("addr_choice_display", "")
-    area, label = parse_display_choice(display_val)
-    st.session_state.addr_choice = label
-    if area:
-        st.session_state.detected_area = area
-        st.session_state.area_locked = True
-
 # ---------------------------
 # DVF local: load + normalize
 # ---------------------------
 def normalize_type_local(x: Any) -> str:
+    """
+    Normalise les libellés DVF vers EXACTEMENT:
+      - "Maison"
+      - "Appartement"
+      - "Autre"
+    """
     s = str(x or "").strip().lower()
     s = s.replace("’", "'")
     s = s.replace("appartementement", "appartement")
@@ -390,16 +412,23 @@ def load_dvf_local(_bust: str = DVF_CACHE_BUSTER) -> pd.DataFrame:
 
     df = pd.read_parquet(DVF_LOCAL_PATH)
 
+    # coercions
     df["date_mutation"] = pd.to_datetime(df.get("date_mutation"), errors="coerce")
     df["valeur_fonciere"] = pd.to_numeric(df.get("valeur_fonciere"), errors="coerce")
     df["surface_reelle_bati"] = pd.to_numeric(df.get("surface_reelle_bati"), errors="coerce")
     df["longitude"] = pd.to_numeric(df.get("longitude"), errors="coerce")
     df["latitude"] = pd.to_numeric(df.get("latitude"), errors="coerce")
 
-    # garde les valeurs brutes pour debug
-    df["type_local_raw"] = df.get("type_local")
+    # garde RAW + normalisation
+    if "type_local" in df.columns:
+        df["type_local_raw"] = df["type_local"]
+    else:
+        df["type_local_raw"] = None
+        df["type_local"] = None
+
     df["type_local"] = df["type_local_raw"].apply(normalize_type_local)
 
+    # filtres qualité
     df = df.dropna(subset=["date_mutation", "valeur_fonciere", "surface_reelle_bati", "longitude", "latitude", "type_local"])
     df = df[df["type_local"].isin(["Maison", "Appartement"])]
     df = df[(df["valeur_fonciere"] > 1000) & (df["surface_reelle_bati"] >= 10)]
@@ -458,9 +487,8 @@ def dvf_select_similaires_strict(
 
     radii = [800, 1500, 2500, 3500]
 
-    # appart tol plus serrée
     if target_type == "Appartement":
-        tolerances = [0.25, 0.30, 0.35]  # 60 -> 45-75 / 42-78 / 39-81
+        tolerances = [0.25, 0.30, 0.35]
         min_needed = 4
     else:
         tolerances = [0.30, 0.40, 0.45]
@@ -478,7 +506,6 @@ def dvf_select_similaires_strict(
         for tol in tolerances:
             low = surface * (1 - tol)
             high = surface * (1 + tol)
-
             df_s = df_r[(df_r["surface_reelle_bati"] >= low) & (df_r["surface_reelle_bati"] <= high)].copy()
             if df_s.empty:
                 continue
@@ -501,7 +528,6 @@ def dvf_select_similaires_strict(
             break
 
     if best.empty:
-        # fallback strict (max 3) : type strict + surface strict (tol max)
         tol = tolerances[-1]
         low = surface * (1 - tol)
         high = surface * (1 + tol)
@@ -546,6 +572,7 @@ def target_band_pct(label: str) -> float:
 
 
 def abs_band_caps(bien_type: str) -> Tuple[float, float]:
+    # FULL width caps
     if normalize_type_local(bien_type) == "Appartement":
         return 5000.0, 11000.0
     return 8000.0, 18000.0
@@ -555,28 +582,9 @@ def clamp(x: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, x))
 
 
-def reset_estimation(keep_contact: bool = True):
-    st.session_state["geo"] = None
-    st.session_state["res"] = None
-    st.session_state["hybrid_done"] = False
-    st.session_state["hybrid_payload"] = None
-    st.session_state["bien_snapshot"] = None
-    st.session_state["step"] = 1
-    if not keep_contact:
-        st.session_state["prenom"] = ""
-        st.session_state["email"] = ""
-        st.session_state["telephone"] = ""
-        st.session_state["consent"] = False
-
 # ---------------------------
-# Debug mode: only when ?debug=1
+# Debug tools (only in debug mode)
 # ---------------------------
-DEBUG = False
-try:
-    DEBUG = (st.query_params.get("debug", "0") == "1")
-except Exception:
-    DEBUG = False
-
 if DEBUG:
     with st.expander("🧹 Outils (debug)", expanded=False):
         cols = st.columns([1, 1])
@@ -591,8 +599,8 @@ if DEBUG:
                 st.cache_data.clear()
                 st.success("DVF reload forcé. Rechargement…")
                 st.rerun()
-        st.caption(f"DVF cache buster (code): {DVF_CACHE_BUSTER}")
-        st.caption(f"DVF cache buster (session): {st.session_state.get('_dvf_bust_manual','—')}")
+        st.caption(f"DVF cache buster: {DVF_CACHE_BUSTER}")
+
 
 # ---------------------------
 # Header
@@ -610,13 +618,6 @@ st.markdown(
     "puis affiner avec des ventes comparables (DVF) et les spécificités du bien.</div>",
     unsafe_allow_html=True,
 )
-
-top_cols = st.columns([1, 3])
-with top_cols[0]:
-    if st.button("🔄 Nouvelle estimation", use_container_width=True):
-        reset_estimation(keep_contact=True)
-        st.rerun()
-
 st.markdown("<hr/>", unsafe_allow_html=True)
 
 # ---------------------------
@@ -645,10 +646,12 @@ if st.session_state.step == 1:
 
         st.markdown("## 📋 Décrivez votre bien")
         c1, c2 = st.columns(2)
+
         with c1:
             st.selectbox("Type de bien", ["Maison", "Appartement"], key="bien_type")
             st.number_input("Surface (m²)", min_value=10.0, max_value=500.0, step=1.0, key="surface")
             st.selectbox("État du bien", ["À rénover", "Moyen", "Bon", "Rénové"], key="etat")
+
         with c2:
             st.number_input("Nombre de pièces", min_value=1, max_value=12, step=1, key="nb_pieces")
             st.number_input("Nombre de chambres", min_value=0, max_value=10, step=1, key="nb_chambres")
@@ -762,15 +765,6 @@ if st.session_state.step == 1:
                 distance_m,
             )
 
-            # ✅ SNAPSHOT verrouillé (anti incohérences Step2)
-            st.session_state["bien_snapshot"] = {
-                "bien_type": st.session_state.bien_type,
-                "surface": float(st.session_state.surface),
-                "pieces": int(st.session_state.nb_pieces),
-                "chambres": int(st.session_state.nb_chambres),
-                "etat": st.session_state.etat,
-            }
-
             st.session_state.geo = geo
             st.session_state.res = res
             st.session_state.step = 2
@@ -799,16 +793,12 @@ if st.session_state.step == 1:
 # Step 2
 # ---------------------------
 if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
+    # padding anti “atterrissage trop bas”
     st.markdown("<div style='height:220px'></div>", unsafe_allow_html=True)
 
     geo = st.session_state.geo
     res = st.session_state.res
     effective_area, ai = get_effective_area()
-
-    # ✅ On verrouille le bien utilisé via snapshot
-    snap = st.session_state.get("bien_snapshot") or {}
-    bien_type_used = snap.get("bien_type", st.session_state.bien_type)
-    surface_used = float(snap.get("surface", st.session_state.surface))
 
     if effective_area == "Clermont-de-l'Oise":
         sector_display = f"{effective_area} — {res.get('quartier','')}"
@@ -816,7 +806,6 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
         sector_display = effective_area
 
     st.markdown("## ✨ Votre estimation (fourchette immédiate)")
-    st.info(f"Bien utilisé (verrouillé) : **{bien_type_used}** — **{surface_used:.0f} m²**")
 
     m1, m2, m3 = st.columns(3, gap="medium")
     with m1:
@@ -848,9 +837,6 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
         st.markdown("<div class='secondary-btn'>", unsafe_allow_html=True)
         if st.button("⬅️ Modifier les infos du bien", use_container_width=True):
             st.session_state.step = 1
-            st.session_state["bien_snapshot"] = None
-            st.session_state.hybrid_done = False
-            st.session_state.hybrid_payload = None
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -907,73 +893,64 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                 time.sleep(min_sleep)
 
             try:
-                progress_step(10, "📦 Chargement de la base DVF locale…", 0.35)
+                progress_step(10, "📦 Chargement de la base DVF locale…", 0.40)
                 df_all = load_dvf_local(st.session_state.get("_dvf_bust_manual", DVF_CACHE_BUSTER))
                 if df_all.empty:
                     st.warning("⚠️ Base DVF locale introuvable (fichier parquet manquant).")
                     st.stop()
 
-                progress_step(55, "🏡 Sélection de comparables cohérents (type + surface)…", 0.70)
-
+                progress_step(55, "🏡 Sélection de comparables cohérents (type + surface)…", 0.80)
                 df_local, used_radius, used_tol = dvf_select_similaires_strict(
                     df_all=df_all,
                     lat=float(geo["lat"]),
                     lon=float(geo["lon"]),
-                    bien_type=bien_type_used,          # ✅ snapshot
-                    surface=surface_used,              # ✅ snapshot
+                    bien_type=st.session_state.bien_type,
+                    surface=float(st.session_state.surface),
                 )
 
                 # --- DEBUG DVF (uniquement si ?debug=1) ---
                 if DEBUG:
-                    with st.expander("🧪 Debug DVF (type_local)", expanded=True):
-                        st.write("Type demandé (snapshot) :", bien_type_used)
-                        st.write("Surface demandée (snapshot) :", surface_used)
+                    st.markdown("### 🧪 Debug DVF (type_local)")
+                    st.write("Type demandé (formulaire) :", st.session_state.bien_type)
 
-                        max_date_dbg = df_all["date_mutation"].max()
-                        cutoff_dbg = max_date_dbg - pd.Timedelta(days=365)
-                        df12 = df_all[df_all["date_mutation"] >= cutoff_dbg].copy()
+                    max_date_dbg = df_all["date_mutation"].max()
+                    cutoff_dbg = max_date_dbg - pd.Timedelta(days=365)
+                    df12 = df_all[df_all["date_mutation"] >= cutoff_dbg].copy()
 
-                        st.write("Rayon utilisé :", used_radius)
-                        st.write("Tolérance utilisée :", used_tol)
+                    st.write("Valeurs RAW (12 mois) :")
+                    if "type_local_raw" in df12.columns:
+                        st.write(df12["type_local_raw"].astype(str).str.strip().value_counts().head(30))
+                    else:
+                        st.warning("Colonne type_local_raw absente.")
 
-                        st.write("Valeurs RAW (12 mois) :")
-                        if "type_local_raw" in df12.columns:
-                            st.dataframe(
-                                df12["type_local_raw"].astype(str).str.strip().value_counts().rename_axis("type_local_raw").reset_index(name="count"),
-                                use_container_width=True
-                            )
-                        else:
-                            st.warning("Colonne type_local_raw absente.")
+                    st.write("Valeurs NORMALISÉES (12 mois) :")
+                    st.write(df12["type_local"].value_counts())
 
-                        st.write("Valeurs NORMALISÉES (12 mois) :")
-                        if "type_local" in df12.columns:
-                            st.dataframe(
-                                df12["type_local"].value_counts().rename_axis("type_local").reset_index(name="count"),
-                                use_container_width=True
-                            )
-                        else:
-                            st.warning("Colonne type_local absente.")
-
-                        st.write("Comparables RETOURNÉS (AVANT filtre) :")
-                        if not df_local.empty and "type_local" in df_local.columns:
-                            st.dataframe(
-                                df_local["type_local"].value_counts().rename_axis("type_local").reset_index(name="count"),
-                                use_container_width=True
-                            )
-                            st.write("surface min/max (avant filtre) :", (float(df_local["surface_reelle_bati"].min()), float(df_local["surface_reelle_bati"].max())))
-                            cols_show = [c for c in ["type_local_raw","type_local","surface_reelle_bati","valeur_fonciere","date_mutation","nom_commune","distance_m"] if c in df_local.columns]
-                            st.dataframe(df_local[cols_show].head(25), use_container_width=True)
-                        else:
-                            st.write("Aucun comparable retourné.")
+                    st.write("Comparables RETOURNÉS : n =", len(df_local))
+                    if not df_local.empty:
+                        st.write("value_counts type_local :", df_local["type_local"].value_counts())
+                        st.write(
+                            "surface min/max (avant filtre) :",
+                            float(df_local["surface_reelle_bati"].min()),
+                            "/",
+                            float(df_local["surface_reelle_bati"].max()),
+                        )
+                        cols_show = [
+                            c for c in [
+                                "type_local_raw","type_local","surface_reelle_bati","valeur_fonciere",
+                                "date_mutation","nom_commune","distance_m"
+                            ] if c in df_local.columns
+                        ]
+                        st.dataframe(df_local[cols_show].head(25), use_container_width=True)
 
                 # ✅ ULTIMATE ENFORCEMENT (zéro incohérence autorisée)
+                target_type = normalize_type_local(st.session_state.bien_type)
                 if not df_local.empty:
                     df_local["type_local"] = df_local["type_local"].apply(normalize_type_local)
-                    target_type = normalize_type_local(bien_type_used)
                     df_local = df_local[df_local["type_local"] == target_type].copy()
 
                     tol = float(used_tol or (0.35 if target_type == "Appartement" else 0.45))
-                    s0 = float(surface_used)
+                    s0 = float(st.session_state.surface)
                     lo = s0 * (1 - tol)
                     hi = s0 * (1 + tol)
                     df_local = df_local[(df_local["surface_reelle_bati"] >= lo) & (df_local["surface_reelle_bati"] <= hi)].copy()
@@ -985,18 +962,7 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                         keep="first",
                     )
 
-                if DEBUG:
-                    with st.expander("✅ Debug DVF (après filtre strict)", expanded=False):
-                        if not df_local.empty:
-                            st.dataframe(
-                                df_local["type_local"].value_counts().rename_axis("type_local").reset_index(name="count"),
-                                use_container_width=True
-                            )
-                            st.write("surface min/max (après filtre) :", (float(df_local["surface_reelle_bati"].min()), float(df_local["surface_reelle_bati"].max())))
-                        else:
-                            st.write("Aucun comparable après filtre strict.")
-
-                progress_step(75, "📊 Calcul de la fourchette optimisée…", 0.75)
+                progress_step(75, "📊 Calcul de la fourchette optimisée…", 0.80)
 
                 algo_min = float(res["min"])
                 algo_max = float(res["max"])
@@ -1010,10 +976,16 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                 fiabilite_label, poids_dvf = reliability_and_weight(nb_similaires)
                 note_guardrail = ""
 
+                # valeurs par défaut
+                opt_min, opt_max = algo_min, algo_max
+
                 if nb_similaires < 2:
-                    opt_min, opt_max = algo_min, algo_max
-                    note_guardrail = "Pas assez de comparables STRICTS sur 12 mois : on reste proche de l’estimation immédiate (pour éviter une incohérence)."
+                    note_guardrail = (
+                        "Pas assez de comparables STRICTS sur 12 mois : "
+                        "on reste proche de l’estimation immédiate (pour éviter une incohérence)."
+                    )
                 else:
+                    # ensure prix_m2 exists
                     if "prix_m2" not in df_local.columns:
                         df_local["prix_m2"] = df_local["valeur_fonciere"] / df_local["surface_reelle_bati"]
                         df_local = df_local.replace([np.inf, -np.inf], np.nan).dropna(subset=["prix_m2"])
@@ -1021,16 +993,23 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                     dvf_m2_low = float(df_local["prix_m2"].quantile(0.25))
                     dvf_m2_high = float(df_local["prix_m2"].quantile(0.75))
 
-                    dvf_min = dvf_m2_low * float(surface_used)
-                    dvf_max = dvf_m2_high * float(surface_used)
+                    surface_used = float(st.session_state.surface)
+                    dvf_min = dvf_m2_low * surface_used
+                    dvf_max = dvf_m2_high * surface_used
 
+                    # ✅ Filet de sécurité #1 (DVF) : jamais inversé
+                    if dvf_min > dvf_max:
+                        dvf_min, dvf_max = dvf_max, dvf_min
+
+                    # hybrid on bounds
                     opt_min = poids_dvf * dvf_min + (1 - poids_dvf) * algo_min
                     opt_max = poids_dvf * dvf_max + (1 - poids_dvf) * algo_max
 
+                    # Force "optimized" narrower and not weird
                     band_pct = target_band_pct(fiabilite_label)
                     full_width_target = max(1.0, ((opt_min + opt_max) / 2.0) * band_pct)
 
-                    abs_min_cap, abs_max_cap = abs_band_caps(bien_type_used)
+                    abs_min_cap, abs_max_cap = abs_band_caps(st.session_state.bien_type)
                     full_width_target = clamp(full_width_target, abs_min_cap, abs_max_cap)
                     full_width_target = min(full_width_target, algo_width * 0.82)
 
@@ -1049,6 +1028,14 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                         pull = 0.45
                         opt_min = (1 - pull) * opt_min + pull * algo_min
                         opt_max = (1 - pull) * opt_max + pull * algo_max
+
+                # ✅ Filet de sécurité #2 (opt) : jamais de fourchette inversée / NaN
+                opt_min = float(opt_min)
+                opt_max = float(opt_max)
+                if not np.isfinite(opt_min) or not np.isfinite(opt_max):
+                    opt_min, opt_max = float(res["min"]), float(res["max"])
+                if opt_min > opt_max:
+                    opt_min, opt_max = opt_max, opt_min
 
                 preview_records: List[Dict[str, Any]] = []
                 if nb_similaires > 0:
@@ -1071,12 +1058,13 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
 
                 progress_step(90, "🔍 Vérification de cohérence…", 0.55)
 
+                # enforce minimum UX duration
                 dt = time.time() - t0
                 if dt < MIN_PROGRESS_SECONDS:
                     time.sleep(MIN_PROGRESS_SECONDS - dt)
 
                 progress.progress(100, text="✅ Terminé.")
-                time.sleep(0.15)
+                time.sleep(0.20)
 
                 st.session_state.hybrid_payload = {
                     "fiabilite_label": fiabilite_label,
@@ -1089,8 +1077,7 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                     "used_tol": float(used_tol),
                     "note_guardrail": note_guardrail,
                     "similaires_preview": preview_records,
-                    "bien_type": bien_type_used,      # ✅ snapshot
-                    "surface": float(surface_used),   # ✅ snapshot
+                    "bien_type": target_type,
                 }
                 st.session_state.hybrid_done = True
 
@@ -1116,9 +1103,8 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
         st.markdown(
             f"<div class='card soft'>"
             f"<b>Indice de fiabilité :</b> {hp['fiabilite_label']}<br>"
-            f"Basé sur <b>{hp['nb_similaires']}</b> biens comparables STRICTS sur 12 mois "
-            f"(rayon max : {hp.get('used_radius','—')} m)<br>"
-            f"<span class='small-note'>Bien utilisé (verrouillé) : {hp.get('bien_type','—')} — {hp.get('surface',0):.0f} m²</span><br><br>"
+            f"Basé sur <b>{hp['nb_similaires']}</b> biens comparables STRICTS (12 mois) "
+            f"(rayon max : {hp.get('used_radius','—')} m)<br><br>"
             f"Basé sur <b>plus d’une centaine de ventes officielles récentes</b> "
             f"(DVF – data.gouv.fr, dernière mise à jour : {hp['last_update']})"
             f"</div>",

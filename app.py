@@ -865,7 +865,6 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
     res = st.session_state.res
     effective_area, ai = get_effective_area()
 
-    # ✅ Use locked values ONLY
     bien_type_used = st.session_state.get("bien_type_used") or st.session_state.get("bien_type")
     surface_used = float(st.session_state.get("surface_used") or st.session_state.get("surface") or 0.0)
 
@@ -937,7 +936,6 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
         )
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ✅ Debug block that survives rerun
     if DEBUG:
         with st.expander("🧪 Debug DVF (Step 2)", expanded=False):
             _render_debug_payload()
@@ -983,8 +981,8 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                     df_all=df_all,
                     lat=float(geo["lat"]),
                     lon=float(geo["lon"]),
-                    bien_type=bien_type_used,          # ✅ LOCKED
-                    surface=float(surface_used),       # ✅ LOCKED
+                    bien_type=bien_type_used,
+                    surface=float(surface_used),
                 )
 
                 # ✅ ULTIMATE ENFORCEMENT (zéro incohérence autorisée)
@@ -999,14 +997,12 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                     hi = s0 * (1 + tol)
                     df_local = df_local[(df_local["surface_reelle_bati"] >= lo) & (df_local["surface_reelle_bati"] <= hi)].copy()
 
-                # De-dup preview
                 if not df_local.empty:
                     df_local = df_local.drop_duplicates(
                         subset=["date_mutation", "valeur_fonciere", "surface_reelle_bati", "type_local", "nom_commune"],
                         keep="first",
                     )
 
-                # ✅ Persist debug payload AFTER selection/enforcement
                 if DEBUG:
                     st.session_state.debug_payload = _build_debug_payload(
                         df_all=df_all,
@@ -1085,6 +1081,21 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
                     opt_min, opt_max = float(res["min"]), float(res["max"])
                 if opt_min > opt_max:
                     opt_min, opt_max = opt_max, opt_min
+
+                # ✅ Filet de sécurité #3 (anti-déception) :
+                # La borne basse optimisée ne doit JAMAIS être sous la borne basse immédiate
+                # => opt_min >= algo_min
+                opt_min_floor = float(algo_min)
+                opt_min = max(opt_min, opt_min_floor)
+
+                # garde une largeur mini (sinon opt_max pourrait se retrouver < opt_min après clamp)
+                min_width = max(4000.0, 0.02 * max(1.0, opt_min))  # ~2% ou 4k minimum
+                if opt_max < opt_min + min_width:
+                    opt_max = opt_min + min_width
+
+                # si malgré tout ça on sort trop des bornes "raisonnables" (à cause des caps), fallback immédiat
+                if not np.isfinite(opt_min) or not np.isfinite(opt_max) or opt_min > opt_max:
+                    opt_min, opt_max = float(res["min"]), float(res["max"])
 
                 preview_records: List[Dict[str, Any]] = []
                 if nb_similaires > 0:

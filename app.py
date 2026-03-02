@@ -20,15 +20,14 @@ PRIMARY = "#004D7F"
 ACCENT = "#FF7E79"
 SOFT = "#EAF2FF"
 
+# Progress UX (force visible)
 MIN_PROGRESS_SECONDS = 2.8
-
-# ✅ Anti-déception (borne basse optimisée max -3% sous borne basse immédiate)
-OPT_MIN_FLOOR_PCT = 0.03
 
 # Gare Clermont-de-l'Oise (lon/lat)
 GARE_LON = 2.41767
 GARE_LAT = 49.38531
 
+# Périmètre (communes autorisées)
 AREAS: Dict[str, Dict[str, str]] = {
     "Clermont-de-l'Oise": {"city": "Clermont", "postcode": "60600", "insee": "60157"},
     "Breuil-le-Vert": {"city": "Breuil-le-Vert", "postcode": "60600", "insee": "60107"},
@@ -42,11 +41,18 @@ AREAS: Dict[str, Dict[str, str]] = {
 AUTO_AREA = "🔎 Détection automatique"
 DEFAULT_AREA = "Clermont-de-l'Oise"
 
+# Géoplateforme (IGN)
 GEOPF_COMPLETION_URL = "https://data.geopf.fr/geocodage/completion/"
 GEOPF_SEARCH_URL = "https://data.geopf.fr/geocodage/search"
 
+# DVF local (généré par build_dvf_local.py)
 DVF_LOCAL_PATH = Path("data/dvf_local.parquet")
-DVF_CACHE_BUSTER = "v9"
+
+# Cache buster (change si besoin)
+DVF_CACHE_BUSTER = "v8"
+
+# Limite “anti-déception” : l'optimisée peut descendre, mais pas plus bas que -3% vs immédiate
+OPT_MIN_FLOOR_PCT = 0.03
 
 # ---------------------------
 # Session state
@@ -55,22 +61,27 @@ st.session_state.setdefault("step", 1)
 st.session_state.setdefault("geo", None)
 st.session_state.setdefault("res", None)
 
-# Inputs step 1
+# Step 1 inputs (VIDES)
 st.session_state.setdefault("area_name", AUTO_AREA)
 st.session_state.setdefault("area_locked", False)
 st.session_state.setdefault("detected_area", DEFAULT_AREA)
 
-st.session_state.setdefault("bien_type", "Maison")
-st.session_state.setdefault("surface", 100.0)
-st.session_state.setdefault("etat", "Moyen")
-st.session_state.setdefault("nb_pieces", 3)
-st.session_state.setdefault("nb_chambres", 2)
+st.session_state.setdefault("bien_type_ui", "Choisir…")  # UI only
+st.session_state.setdefault("etat_ui", "Choisir…")       # UI only
+st.session_state.setdefault("surface_txt", "")           # string
+st.session_state.setdefault("nb_pieces_txt", "")         # string
+st.session_state.setdefault("nb_chambres_txt", "")       # string
+
 st.session_state.setdefault("addr_typed", "")
 st.session_state.setdefault("addr_choice", "")
 st.session_state.setdefault("addr_choice_display", "")
 
-# ✅ Inputs verrouillés (utilisés en step 2)
-st.session_state.setdefault("used", None)  # dict
+# Parsed values (set when valid)
+st.session_state.setdefault("bien_type", None)   # "Maison" / "Appartement"
+st.session_state.setdefault("etat", None)
+st.session_state.setdefault("surface", None)     # float
+st.session_state.setdefault("nb_pieces", None)   # int
+st.session_state.setdefault("nb_chambres", None) # int
 
 # Contact
 st.session_state.setdefault("prenom", "")
@@ -81,9 +92,12 @@ st.session_state.setdefault("consent", False)
 # UI
 st.session_state.setdefault("show_explain", False)
 
-# Hybrid
+# Hybrid storage
 st.session_state.setdefault("hybrid_done", False)
 st.session_state.setdefault("hybrid_payload", None)
+
+# Manual cache bust
+st.session_state.setdefault("_dvf_bust_manual", None)
 
 # ---------------------------
 # Debug mode: only when ?debug=1
@@ -95,7 +109,7 @@ except Exception:
     DEBUG = False
 
 # ---------------------------
-# CSS
+# CSS (stable + icons fix)
 # ---------------------------
 st.markdown(
     f"""
@@ -106,6 +120,7 @@ html, body, [class*="stApp"] {{
   font-family: 'Poppins', sans-serif !important;
 }}
 
+/* Force expander chevron icons (Streamlit) */
 i.material-icons, span.material-icons, [class*="material-icons"] {{
   font-family: 'Material Icons' !important;
 }}
@@ -121,7 +136,11 @@ h1 {{
     text-align: center !important;
     margin-bottom: 0.2rem !important;
 }}
-h2, h3 {{
+h2 {{
+    color: {PRIMARY} !important;
+    font-weight: 750 !important;
+}}
+h3 {{
     color: {PRIMARY} !important;
     font-weight: 750 !important;
 }}
@@ -155,6 +174,7 @@ h2, h3 {{
 
 hr {{ border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 1.3rem 0; }}
 
+/* Primary buttons */
 .stButton > button,
 .stFormSubmitButton > button {{
     background: linear-gradient(135deg, {ACCENT} 0%, #ff5b66 100%) !important;
@@ -171,7 +191,13 @@ hr {{ border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 1.3rem 0; }}
     box-shadow: 0 14px 34px rgba(255, 126, 121, 0.48) !important;
     transform: translateY(-1px);
 }}
+.stButton > button:disabled {{
+    opacity: 0.45 !important;
+    box-shadow: none !important;
+    transform: none !important;
+}}
 
+/* Secondary button */
 .secondary-btn .stButton > button {{
     background: rgba(0, 77, 127, 0.08) !important;
     color: {PRIMARY} !important;
@@ -190,7 +216,7 @@ hr {{ border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 1.3rem 0; }}
 )
 
 # ---------------------------
-# Helpers
+# Helpers (general)
 # ---------------------------
 def haversine_m(lat1, lon1, lat2, lon2) -> float:
     R = 6371000.0
@@ -201,11 +227,39 @@ def haversine_m(lat1, lon1, lat2, lon2) -> float:
     a = np.sin(dphi / 2) ** 2 + np.cos(phi1) * np.cos(phi2) * np.sin(dl / 2) ** 2
     return float(2 * R * np.arctan2(np.sqrt(a), np.sqrt(1 - a)))
 
+
 def norm(s: str) -> str:
     return (s or "").strip().lower().replace("’", "'")
 
+
 def eur(x: float) -> str:
     return f"{x:,.0f} €".replace(",", " ")
+
+
+def try_parse_float(txt: str) -> Optional[float]:
+    s = (txt or "").strip().replace(",", ".")
+    if not s:
+        return None
+    try:
+        v = float(s)
+        if np.isfinite(v):
+            return v
+    except Exception:
+        return None
+    return None
+
+
+def try_parse_int(txt: str) -> Optional[int]:
+    s = (txt or "").strip()
+    if not s:
+        return None
+    # accepte "4.0" ou "4"
+    try:
+        v = int(float(s.replace(",", ".")))
+        return v
+    except Exception:
+        return None
+
 
 def normalize_query_to_area(q: str, city: str, postcode: str) -> str:
     q = (q or "").strip()
@@ -216,6 +270,7 @@ def normalize_query_to_area(q: str, city: str, postcode: str) -> str:
         q = f"{q}, {postcode} {city}, Oise, France"
     return q
 
+
 def get_effective_area() -> Tuple[str, Dict[str, str]]:
     if st.session_state.area_name in AREAS:
         a = st.session_state.area_name
@@ -224,6 +279,7 @@ def get_effective_area() -> Tuple[str, Dict[str, str]]:
     if detected in AREAS:
         return detected, AREAS[detected]
     return DEFAULT_AREA, AREAS[DEFAULT_AREA]
+
 
 def parse_display_choice(display_value: str) -> Tuple[Optional[str], str]:
     s = (display_value or "").strip()
@@ -237,63 +293,19 @@ def parse_display_choice(display_value: str) -> Tuple[Optional[str], str]:
             return None, lab
     return None, s
 
+
 def on_addr_choice_display_change():
+    # (on garde le callback, mais on ne DEPEND PAS de lui)
     display_val = st.session_state.get("addr_choice_display", "")
     area, label = parse_display_choice(display_val)
-    st.session_state.addr_choice = label
+    st.session_state.addr_choice = (label or "").strip()
     if area:
         st.session_state.detected_area = area
         st.session_state.area_locked = True
 
-# ---------------------------
-# DVF type + pieces
-# ---------------------------
-def normalize_type_local(x: Any) -> str:
-    s = str(x or "").strip().lower()
-    s = s.replace("’", "'")
-    s = s.replace("appartementement", "appartement")
-    s = s.replace("appartemment", "appartement")
-    s = s.replace("appartemnt", "appartement")
-    s = s.replace("apt", "appartement")
-    if "appart" in s:
-        return "Appartement"
-    if "maison" in s:
-        return "Maison"
-    return "Autre"
-
-def detect_piece_col(df: pd.DataFrame) -> Optional[str]:
-    # ✅ on élargit fort (selon comment ton parquet est construit)
-    candidates = [
-        "nombre_pieces_principales",
-        "nb_pieces_principales",
-        "nb_pieces",
-        "nb_piece",
-        "nombre_pieces",
-        "pieces",
-        "piece",
-        "nb_pp",
-        "npp",
-    ]
-    for c in candidates:
-        if c in df.columns:
-            return c
-    # fallback: any column containing "piece" (sans casser)
-    for c in df.columns:
-        cl = c.lower()
-        if "piece" in cl and "surface" not in cl:
-            return c
-    return None
-
-def coerce_pieces_series(s: pd.Series) -> pd.Series:
-    out = pd.to_numeric(s, errors="coerce")
-    if out.isna().mean() > 0.3:
-        extracted = s.astype(str).str.extract(r"(\d+)")[0]
-        out2 = pd.to_numeric(extracted, errors="coerce")
-        out = out.fillna(out2)
-    return out.round().astype("Int64")
 
 # ---------------------------
-# GeoPlateforme
+# GeoPlateforme (IGN)
 # ---------------------------
 @st.cache_data(ttl=60 * 60, show_spinner=False)
 def geopf_completion(text: str, postcode: str, city: str, max_resp: int = 7) -> List[str]:
@@ -330,6 +342,7 @@ def geopf_completion(text: str, postcode: str, city: str, max_resp: int = 7) -> 
             seen.add(lab)
     return dedup
 
+
 @st.cache_data(ttl=24 * 60 * 60, show_spinner=False)
 def geopf_geocode_one(query: str) -> Optional[Dict[str, Any]]:
     if not query:
@@ -350,8 +363,9 @@ def geopf_geocode_one(query: str) -> Optional[Dict[str, Any]]:
     lon, lat = float(coords[0]), float(coords[1])
     return {"lat": lat, "lon": lon, "label": props.get("label") or query}
 
+
 # ---------------------------
-# Estimation immediate
+# Estimation (step 1)
 # ---------------------------
 def quartier_from_distance(distance_m: float) -> str:
     if distance_m < 500:
@@ -364,6 +378,7 @@ def quartier_from_distance(distance_m: float) -> str:
         return "Est (Pavillons)"
     return "Ouest (Neuf)"
 
+
 def base_prix_m2(quartier: str, bien_type: str) -> float:
     table = {
         "Centre-ville": {"Maison": 2100, "Appartement": 2500},
@@ -373,6 +388,7 @@ def base_prix_m2(quartier: str, bien_type: str) -> float:
         "Ouest (Neuf)": {"Maison": 2450, "Appartement": 2800},
     }
     return float(table[quartier][bien_type])
+
 
 def estimate_price(
     bien_type: str,
@@ -407,9 +423,45 @@ def estimate_price(
         },
     }
 
+
 # ---------------------------
-# DVF load
+# DVF local: load + normalize + pièces
 # ---------------------------
+def normalize_type_local(x: Any) -> str:
+    s = str(x or "").strip().lower()
+    s = s.replace("’", "'")
+    s = s.replace("appartementement", "appartement")
+    s = s.replace("appartemment", "appartement")
+    s = s.replace("appartemnt", "appartement")
+    s = s.replace("apt", "appartement")
+    if "appart" in s:
+        return "Appartement"
+    if "maison" in s:
+        return "Maison"
+    return "Autre"
+
+
+def pick_piece_col(df: pd.DataFrame) -> Optional[str]:
+    """
+    DVF/exports varient selon ton build parquet.
+    On essaye les colonnes les plus plausibles.
+    """
+    candidates = [
+        "nombre_pieces_principales",
+        "nb_pieces_principales",
+        "nb_pieces",
+        "nombre_pieces",
+        "nombre_pieces_princ",
+        "nb_pieces_princ",
+        "n_pieces",
+        "pieces",
+    ]
+    for c in candidates:
+        if c in df.columns:
+            return c
+    return None
+
+
 @st.cache_data(ttl=6 * 60 * 60, show_spinner=False)
 def load_dvf_local(_bust: str = DVF_CACHE_BUSTER) -> pd.DataFrame:
     if not DVF_LOCAL_PATH.exists():
@@ -417,12 +469,14 @@ def load_dvf_local(_bust: str = DVF_CACHE_BUSTER) -> pd.DataFrame:
 
     df = pd.read_parquet(DVF_LOCAL_PATH)
 
+    # coercions
     df["date_mutation"] = pd.to_datetime(df.get("date_mutation"), errors="coerce")
     df["valeur_fonciere"] = pd.to_numeric(df.get("valeur_fonciere"), errors="coerce")
     df["surface_reelle_bati"] = pd.to_numeric(df.get("surface_reelle_bati"), errors="coerce")
     df["longitude"] = pd.to_numeric(df.get("longitude"), errors="coerce")
     df["latitude"] = pd.to_numeric(df.get("latitude"), errors="coerce")
 
+    # RAW + normalisation
     if "type_local" in df.columns:
         df["type_local_raw"] = df["type_local"]
     else:
@@ -431,18 +485,19 @@ def load_dvf_local(_bust: str = DVF_CACHE_BUSTER) -> pd.DataFrame:
 
     df["type_local"] = df["type_local_raw"].apply(normalize_type_local)
 
-    pc = detect_piece_col(df)
+    # pièces si présent
+    pc = pick_piece_col(df)
     if pc:
-        df["pieces"] = coerce_pieces_series(df[pc])
-        df["pieces_src_col"] = pc
+        df["nb_pieces_dvf"] = pd.to_numeric(df.get(pc), errors="coerce")
     else:
-        df["pieces"] = pd.Series([pd.NA] * len(df), dtype="Int64")
-        df["pieces_src_col"] = None
+        df["nb_pieces_dvf"] = np.nan
 
+    # filtres qualité
     df = df.dropna(subset=["date_mutation", "valeur_fonciere", "surface_reelle_bati", "longitude", "latitude", "type_local"])
     df = df[df["type_local"].isin(["Maison", "Appartement"])]
     df = df[(df["valeur_fonciere"] > 1000) & (df["surface_reelle_bati"] >= 10)]
     return df
+
 
 def dvf_select_similaires_strict(
     df_all: pd.DataFrame,
@@ -450,8 +505,13 @@ def dvf_select_similaires_strict(
     lon: float,
     bien_type: str,
     surface: float,
-    nb_pieces: Optional[int] = None,
 ) -> Tuple[pd.DataFrame, int, float]:
+    """
+    STRICT:
+      - type_local strict
+      - surface strict (tol progressive)
+      - jamais de fallback qui mélange les types ou explose les surfaces
+    """
     if df_all.empty:
         return pd.DataFrame(), 0, 0.0
 
@@ -467,11 +527,13 @@ def dvf_select_similaires_strict(
     if df.empty:
         return pd.DataFrame(), 0, 0.0
 
+    # strict type
     df["type_local"] = df["type_local"].apply(normalize_type_local)
     df = df[df["type_local"] == target_type].copy()
     if df.empty:
         return pd.DataFrame(), 0, 0.0
 
+    # distance vectorized
     lat_arr = df["latitude"].to_numpy(dtype=float)
     lon_arr = df["longitude"].to_numpy(dtype=float)
     lat0 = float(lat)
@@ -489,7 +551,7 @@ def dvf_select_similaires_strict(
     radii = [800, 1500, 2500, 3500]
 
     if target_type == "Appartement":
-        tolerances = [0.25, 0.30, 0.35]
+        tolerances = [0.22, 0.28, 0.35]  # plus serré
         min_needed = 4
     else:
         tolerances = [0.30, 0.40, 0.45]
@@ -508,16 +570,6 @@ def dvf_select_similaires_strict(
             low = surface * (1 - tol)
             high = surface * (1 + tol)
             df_s = df_r[(df_r["surface_reelle_bati"] >= low) & (df_r["surface_reelle_bati"] <= high)].copy()
-            if df_s.empty:
-                continue
-
-            # pièces (si dispo)
-            if nb_pieces is not None and "pieces" in df_s.columns:
-                known_ratio = df_s["pieces"].notna().mean()
-                if known_ratio >= 0.40:
-                    p0 = int(nb_pieces)
-                    df_s = df_s[df_s["pieces"].between(p0 - 1, p0 + 1) | df_s["pieces"].isna()].copy()
-
             if df_s.empty:
                 continue
 
@@ -557,6 +609,7 @@ def dvf_select_similaires_strict(
     best = best.sort_values(["distance_m", "date_mutation"], ascending=[True, False]).copy()
     return best, used_radius, used_tol
 
+
 def reliability_and_weight(n: int) -> Tuple[str, float]:
     if n > 15:
         return "🟢 Très élevée", 0.78
@@ -567,6 +620,7 @@ def reliability_and_weight(n: int) -> Tuple[str, float]:
     if n >= 2:
         return "🟠 Modérée", 0.50
     return "🔴 Faible", 0.0
+
 
 def target_band_pct(label: str) -> float:
     if "Très élevée" in label:
@@ -579,16 +633,19 @@ def target_band_pct(label: str) -> float:
         return 0.095
     return 0.14
 
+
 def abs_band_caps(bien_type: str) -> Tuple[float, float]:
     if normalize_type_local(bien_type) == "Appartement":
         return 5000.0, 11000.0
     return 8000.0, 18000.0
 
+
 def clamp(x: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, x))
 
+
 # ---------------------------
-# Debug tools
+# Debug tools (only in debug mode)
 # ---------------------------
 if DEBUG:
     with st.expander("🧹 Outils (debug)", expanded=False):
@@ -605,6 +662,8 @@ if DEBUG:
                 st.success("DVF reload forcé. Rechargement…")
                 st.rerun()
         st.caption(f"DVF cache buster: {DVF_CACHE_BUSTER}")
+        st.caption(f"DVF cache buster (session): {st.session_state.get('_dvf_bust_manual') or '—'}")
+
 
 # ---------------------------
 # Header
@@ -649,29 +708,41 @@ if st.session_state.step == 1:
         )
 
         st.markdown("## 📋 Décrivez votre bien")
+
         c1, c2 = st.columns(2)
-
         with c1:
-            st.selectbox("Type de bien", ["Maison", "Appartement"], key="bien_type")
-            st.number_input("Surface (m²)", min_value=10.0, max_value=500.0, step=1.0, key="surface")
-            st.selectbox("État du bien", ["À rénover", "Moyen", "Bon", "Rénové"], key="etat")
-
+            st.selectbox("Type de bien", ["Choisir…", "Maison", "Appartement"], key="bien_type_ui")
+            st.text_input("Surface (m²)", key="surface_txt", placeholder="Ex : 80")
+            st.selectbox("État du bien", ["Choisir…", "À rénover", "Moyen", "Bon", "Rénové"], key="etat_ui")
         with c2:
-            st.number_input("Nombre de pièces", min_value=1, max_value=12, step=1, key="nb_pieces")
-            st.number_input("Nombre de chambres", min_value=0, max_value=10, step=1, key="nb_chambres")
+            st.text_input("Nombre de pièces", key="nb_pieces_txt", placeholder="Ex : 4")
+            st.text_input("Nombre de chambres", key="nb_chambres_txt", placeholder="Ex : 2")
             st.markdown(
                 "<div class='small-note'>Plus le descriptif est précis, plus l’estimation sera cohérente.</div>",
                 unsafe_allow_html=True,
             )
 
+        # Parse values live (for button enabling + later use)
+        bien_type = st.session_state.get("bien_type_ui")
+        etat = st.session_state.get("etat_ui")
+        surface = try_parse_float(st.session_state.get("surface_txt", ""))
+        nb_pieces = try_parse_int(st.session_state.get("nb_pieces_txt", ""))
+        nb_chambres = try_parse_int(st.session_state.get("nb_chambres_txt", ""))
+
+        st.session_state.bien_type = bien_type if bien_type in ["Maison", "Appartement"] else None
+        st.session_state.etat = etat if etat in ["À rénover", "Moyen", "Bon", "Rénové"] else None
+        st.session_state.surface = surface if (surface is not None and surface >= 10) else None
+        st.session_state.nb_pieces = nb_pieces if (nb_pieces is not None and nb_pieces >= 1) else None
+        st.session_state.nb_chambres = nb_chambres if (nb_chambres is not None and nb_chambres >= 0) else None
+
         st.markdown("## 🧭 Localisation")
-        st.text_input("Commencez à taper l’adresse", placeholder="Ex : 5 Rue du Chemin Blanc", key="addr_typed")
+        st.text_input("Commencez à taper l’adresse", key="addr_typed", placeholder="Ex : 10 Rue de la Croix Picard")
         st.markdown(
-            "<div class='small-note'>Plus l’adresse est précise (numéro + rue), plus le résultat est fiable.</div>",
+            "<div class='small-note'>Commencez à taper, puis choisissez une adresse proposée.</div>",
             unsafe_allow_html=True,
         )
 
-        typed = st.session_state.addr_typed.strip()
+        typed = (st.session_state.addr_typed or "").strip()
         addr_status = st.empty()
         suggestions_display: List[str] = []
 
@@ -680,19 +751,18 @@ if st.session_state.step == 1:
         else:
             addr_status.markdown("<div class='small-note'>Tapez au moins 3 caractères pour voir des suggestions.</div>", unsafe_allow_html=True)
 
-        if st.session_state.area_name == AUTO_AREA:
-            if len(typed) >= 3:
+        if len(typed) >= 3:
+            if st.session_state.area_name == AUTO_AREA:
                 for area_name, info in AREAS.items():
                     try:
-                        labs = geopf_completion(typed, postcode=info["postcode"], city=info["city"], max_resp=5)
+                        labs = geopf_completion(typed, postcode=info["postcode"], city=info["city"], max_resp=6)
                     except Exception:
                         labs = []
                     for lab in labs:
                         suggestions_display.append(f"{area_name} — {lab}")
-        else:
-            if len(typed) >= 3:
+            else:
                 try:
-                    labs = geopf_completion(typed, postcode=ai["postcode"], city=ai["city"])
+                    labs = geopf_completion(typed, postcode=ai["postcode"], city=ai["city"], max_resp=8)
                 except Exception:
                     labs = []
                 suggestions_display = labs[:]
@@ -700,26 +770,86 @@ if st.session_state.step == 1:
         if len(typed) >= 3:
             addr_status.empty()
 
+        # "Pseudo-combobox": on affiche la dropdown seulement si suggestions
         if suggestions_display:
             prev_display = st.session_state.get("addr_choice_display", "")
             default_index = suggestions_display.index(prev_display) if prev_display in suggestions_display else 0
             st.selectbox(
-                "Suggestions (secteur)",
+                "Adresses proposées",
                 suggestions_display,
                 index=default_index,
                 key="addr_choice_display",
                 on_change=on_addr_choice_display_change,
             )
-        else:
-            st.session_state.addr_choice = typed
-            st.session_state.addr_choice_display = typed
 
-        if st.button("🚀 Obtenir ma fourchette (sans engagement)", use_container_width=True):
+            # ✅ IMPORTANT: on NE DÉPEND PAS du on_change
+            display_val = (st.session_state.get("addr_choice_display") or "").strip()
+            area_parsed, label_parsed = parse_display_choice(display_val)
+
+            if label_parsed:
+                st.session_state.addr_choice = label_parsed
+
+            if st.session_state.area_name == AUTO_AREA and (area_parsed in AREAS):
+                st.session_state.detected_area = area_parsed
+                st.session_state.area_locked = True
+
+            # Remplit le champ de saisie = sensation "1 seul champ"
+            if label_parsed and label_parsed != st.session_state.get("addr_typed", ""):
+                st.session_state.addr_typed = label_parsed
+
+        else:
+            # pas de suggestions -> on garde ce que la personne tape, mais on ne valide pas
+            st.session_state.addr_choice_display = typed
+            st.session_state.addr_choice = ""
+
+        if st.session_state.area_name == AUTO_AREA:
+            detected = st.session_state.get("detected_area")
+            if detected in AREAS and st.session_state.area_locked:
+                inf = AREAS[detected]
+                st.markdown(
+                    f"<div class='card soft'><b>Commune détectée :</b> {detected} — <b>CP :</b> {inf['postcode']}</div>",
+                    unsafe_allow_html=True,
+                )
+
+        # Ready logic (button disabled)
+        ready_bien = st.session_state.bien_type in ["Maison", "Appartement"]
+        ready_surface = isinstance(st.session_state.surface, (int, float)) and float(st.session_state.surface) >= 10
+        ready_etat = st.session_state.etat in ["À rénover", "Moyen", "Bon", "Rénové"]
+        ready_pieces = isinstance(st.session_state.nb_pieces, int) and st.session_state.nb_pieces >= 1
+        ready_chambres = isinstance(st.session_state.nb_chambres, int) and st.session_state.nb_chambres >= 0
+
+        # ✅ on exige que l'adresse soit CHOISIE dans les suggestions => addr_choice non vide
+        addr_choice = (st.session_state.addr_choice or "").strip()
+        ready_addr = len(addr_choice) >= 10
+
+        form_ready = all([ready_bien, ready_surface, ready_etat, ready_pieces, ready_chambres, ready_addr])
+
+        if not form_ready:
+            st.markdown(
+                "<div class='small-note'>Complète tous les champs et choisis une adresse proposée pour activer le bouton.</div>",
+                unsafe_allow_html=True,
+            )
+
+        if st.button("🚀 Obtenir ma fourchette (sans engagement)", use_container_width=True, disabled=not form_ready):
+            # verrouillage auto area si besoin (déjà fait plus haut, mais on sécurise)
+            if st.session_state.area_name == AUTO_AREA:
+                display_val = (st.session_state.get("addr_choice_display") or "").strip()
+                detected_area, detected_label = parse_display_choice(display_val)
+                if detected_area:
+                    st.session_state.detected_area = detected_area
+                    st.session_state.area_locked = True
+                if detected_label:
+                    st.session_state.addr_choice = detected_label
+
+                if not (st.session_state.get("detected_area") in AREAS and st.session_state.area_locked):
+                    st.error("Choisis une suggestion d’adresse (pour détecter la commune) ou sélectionne la commune manuellement.")
+                    st.stop()
+
             effective_area, ai = get_effective_area()
 
             addr_choice = (st.session_state.addr_choice or "").strip()
-            if not addr_choice or len(addr_choice) < 6:
-                st.error("Ajoute une adresse plus complète (ou choisis une suggestion dans le secteur).")
+            if not addr_choice or len(addr_choice) < 10:
+                st.error("Choisis une adresse dans la liste de suggestions.")
                 st.stop()
 
             q = normalize_query_to_area(addr_choice, city=ai["city"], postcode=ai["postcode"])
@@ -738,26 +868,14 @@ if st.session_state.step == 1:
                 st.error("Cette adresse ne semble pas être dans la commune sélectionnée/détectée. Choisis une suggestion du secteur.")
                 st.stop()
 
-            # ✅ VERROUILLAGE INPUTS UTILISÉS
-            used = {
-                "bien_type": str(st.session_state.bien_type),
-                "surface": float(st.session_state.surface),
-                "nb_pieces": int(st.session_state.nb_pieces),
-                "nb_chambres": int(st.session_state.nb_chambres),
-                "etat": str(st.session_state.etat),
-                "area": effective_area,
-                "postcode": ai["postcode"],
-                "city": ai["city"],
-            }
-            st.session_state.used = used
-
             distance_m = haversine_m(geo["lat"], geo["lon"], GARE_LAT, GARE_LON)
+
             res = estimate_price(
-                used["bien_type"],
-                used["surface"],
-                used["nb_pieces"],
-                used["nb_chambres"],
-                used["etat"],
+                st.session_state.bien_type,
+                float(st.session_state.surface),
+                int(st.session_state.nb_pieces),
+                int(st.session_state.nb_chambres),
+                st.session_state.etat,
                 distance_m,
             )
 
@@ -788,15 +906,17 @@ if st.session_state.step == 1:
 # ---------------------------
 # Step 2
 # ---------------------------
-if st.session_state.step == 2 and st.session_state.geo and st.session_state.res and st.session_state.used:
+if st.session_state.step == 2 and st.session_state.geo and st.session_state.res:
     st.markdown("<div style='height:220px'></div>", unsafe_allow_html=True)
 
     geo = st.session_state.geo
     res = st.session_state.res
-    used = st.session_state.used
+    effective_area, ai = get_effective_area()
 
-    effective_area, _ai = get_effective_area()
-    sector_display = effective_area if effective_area != "Clermont-de-l'Oise" else f"{effective_area} — {res.get('quartier','')}"
+    if effective_area == "Clermont-de-l'Oise":
+        sector_display = f"{effective_area} — {res.get('quartier','')}"
+    else:
+        sector_display = effective_area
 
     st.markdown("## ✨ Votre estimation (fourchette immédiate)")
 
@@ -808,7 +928,7 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res 
         )
     with m2:
         st.markdown(
-            f"<div class='metric'><p class='k'>Bien utilisé (verrouillé)</p><p class='v'>{used['bien_type']} — {int(round(used['surface']))} m²</p></div>",
+            f"<div class='metric'><p class='k'>Secteur</p><p class='v'>{sector_display}</p></div>",
             unsafe_allow_html=True,
         )
     with m3:
@@ -819,8 +939,7 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res 
 
     st.markdown(
         f"<div class='card soft'><b>Adresse géocodée :</b> {geo.get('label','')}<br/>"
-        f"<b>Secteur :</b> {sector_display}<br/>"
-        f"<b>Pièces (verrouillé) :</b> {used['nb_pieces']} · <b>Chambres :</b> {used['nb_chambres']}</div>",
+        f"<b>Prix/m² indicatif (après facteurs) :</b> {eur(res['prix_m2'])} / m²</div>",
         unsafe_allow_html=True,
     )
 
@@ -844,11 +963,16 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res 
         st.markdown(
             f"""
 - **Base quartier (€/m²)** : {ex.get("Base €/m²", "—")}
-- **Pièces** : {ex.get("Impact pièces", "—")}
+- **Pièces** : {ex.get("Impact pièces", "—")}  *(pris en compte ici)*
 - **Chambres** : {ex.get("Impact chambres", "—")}
 - **État du bien** : {ex.get("Impact état", "—")}
 - **Proximité gare** : {ex.get("Bonus gare", "—")}
 """.strip()
+        )
+        st.markdown(
+            "<p class='small-note'>DVF ne permet pas toujours de filtrer parfaitement par nombre de pièces (selon la colonne disponible). "
+            "On l’affiche quand on l’a, mais on ne le rend pas bloquant pour ne pas perdre les bons comparables.</p>",
+            unsafe_allow_html=True,
         )
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -865,6 +989,7 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res 
         with c2:
             st.text_input("Votre téléphone", key="telephone")
             st.checkbox("J’accepte d’être recontacté au sujet de cette estimation (sans spam).", key="consent")
+
         submitted = st.form_submit_button("✅ Obtenir la fourchette optimisée", use_container_width=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
@@ -881,44 +1006,61 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res 
                 time.sleep(min_sleep)
 
             try:
-                progress_step(10, "📦 Chargement de la base DVF locale…", 0.35)
-                df_all = load_dvf_local(st.session_state.get("_dvf_bust_manual", DVF_CACHE_BUSTER))
+                progress_step(10, "📦 Chargement de la base DVF locale…", 0.40)
+                df_all = load_dvf_local(st.session_state.get("_dvf_bust_manual") or DVF_CACHE_BUSTER)
                 if df_all.empty:
                     st.warning("⚠️ Base DVF locale introuvable (fichier parquet manquant).")
                     st.stop()
 
-                progress_step(55, "🏡 Sélection de comparables cohérents (type + surface + pièces)…", 0.70)
-
+                progress_step(55, "🏡 Sélection de comparables cohérents (type + surface)…", 0.80)
                 df_local, used_radius, used_tol = dvf_select_similaires_strict(
                     df_all=df_all,
                     lat=float(geo["lat"]),
                     lon=float(geo["lon"]),
-                    bien_type=used["bien_type"],
-                    surface=float(used["surface"]),
-                    nb_pieces=int(used["nb_pieces"]),
+                    bien_type=st.session_state.bien_type,
+                    surface=float(st.session_state.surface),
                 )
 
-                # ✅ Filet sécurité TYPE #1 (re-filtre dur)
-                target_type = normalize_type_local(used["bien_type"])
+                # --- DEBUG DVF (uniquement si ?debug=1) ---
+                if DEBUG:
+                    with st.expander("🧪 Debug DVF (type_local)", expanded=True):
+                        st.write("Type demandé (formulaire) :", st.session_state.bien_type)
+                        st.write("Rayon utilisé :", used_radius)
+                        st.write("Tolérance utilisée :", used_tol)
+
+                        max_date_dbg = df_all["date_mutation"].max()
+                        cutoff_dbg = max_date_dbg - pd.Timedelta(days=365)
+                        df12 = df_all[df_all["date_mutation"] >= cutoff_dbg].copy()
+
+                        st.write("Valeurs RAW (12 mois) :")
+                        if "type_local_raw" in df12.columns:
+                            st.dataframe(df12["type_local_raw"].astype(str).str.strip().value_counts().reset_index().rename(columns={"index": "type_local_raw", "type_local_raw": "count"}), use_container_width=True)
+                        else:
+                            st.warning("Colonne type_local_raw absente.")
+
+                        st.write("Valeurs NORMALISÉES (12 mois) :")
+                        st.dataframe(df12["type_local"].value_counts().reset_index().rename(columns={"index": "type_local", "type_local": "count"}), use_container_width=True)
+
+                        st.write("Comparables RETOURNÉS (AVANT filet) : n =", len(df_local))
+                        if not df_local.empty:
+                            st.dataframe(df_local["type_local"].value_counts().reset_index().rename(columns={"index": "type_local", "type_local": "count"}), use_container_width=True)
+                            st.write("surface min/max (avant filtre) :", (float(df_local["surface_reelle_bati"].min()), float(df_local["surface_reelle_bati"].max())))
+                            cols_show = [c for c in ["type_local_raw","type_local","surface_reelle_bati","nb_pieces_dvf","valeur_fonciere","date_mutation","nom_commune","distance_m"] if c in df_local.columns]
+                            st.dataframe(df_local[cols_show].head(25), use_container_width=True)
+
+                # ✅ FILET SÉCURITÉ TYPE+SURFACE (anti “maisons dans appart”)
+                target_type = normalize_type_local(st.session_state.bien_type)
                 if not df_local.empty:
                     df_local["type_local"] = df_local["type_local"].apply(normalize_type_local)
                     df_local = df_local[df_local["type_local"] == target_type].copy()
 
-                # ✅ Filet sécurité TYPE #2 (si ça mélange encore => purge)
-                if not df_local.empty:
-                    uniq = set(df_local["type_local"].dropna().unique().tolist())
-                    if len(uniq) > 1 or (len(uniq) == 1 and list(uniq)[0] != target_type):
-                        df_local = pd.DataFrame()
-
-                # Filtre surface selon tol utilisée
-                if not df_local.empty:
                     tol = float(used_tol or (0.35 if target_type == "Appartement" else 0.45))
-                    s0 = float(used["surface"])
+                    s0 = float(st.session_state.surface)
                     lo = s0 * (1 - tol)
                     hi = s0 * (1 + tol)
                     df_local = df_local[(df_local["surface_reelle_bati"] >= lo) & (df_local["surface_reelle_bati"] <= hi)].copy()
 
-                # De-dup
+                # De-dup preview
                 if not df_local.empty:
                     df_local = df_local.drop_duplicates(
                         subset=["date_mutation", "valeur_fonciere", "surface_reelle_bati", "type_local", "nom_commune"],
@@ -926,22 +1068,15 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res 
                     )
 
                 if DEBUG:
-                    with st.expander("🧪 Debug DVF (step 2)", expanded=True):
-                        st.write("Type VERROUILLÉ :", used["bien_type"], "-> normalisé :", target_type)
-                        st.write("Surface VERROUILLÉE :", used["surface"])
-                        st.write("Pièces VERROUILLÉES :", used["nb_pieces"])
-                        st.write("Colonne pièces détectée (parquet) :", df_all.get("pieces_src_col", pd.Series([None])).iloc[0] if "pieces_src_col" in df_all.columns else None)
-                        st.write("Comparables : n =", len(df_local))
+                    with st.expander("🧪 Debug DVF (après filet strict)", expanded=True):
+                        st.write("Comparables RETOURNÉS (APRÈS filet strict) : n =", len(df_local))
                         if not df_local.empty:
-                            st.write("type_local unique :", df_local["type_local"].unique())
-                            st.write("pieces (value_counts):")
-                            st.write(df_local["pieces"].value_counts(dropna=False).head(20))
-                            cols_show = [c for c in ["type_local_raw","type_local","surface_reelle_bati","pieces","valeur_fonciere","date_mutation","nom_commune","distance_m"] if c in df_local.columns]
-                            st.dataframe(df_local[cols_show].head(50), use_container_width=True)
-                        else:
-                            st.warning("df_local est vide après filets de sécurité type => aucun comparable affiché (c'est voulu plutôt que faux).")
+                            st.dataframe(df_local["type_local"].value_counts().reset_index().rename(columns={"index": "type_local", "type_local": "count"}), use_container_width=True)
+                            st.write("surface min/max (après filtre) :", (float(df_local["surface_reelle_bati"].min()), float(df_local["surface_reelle_bati"].max())))
+                            cols_show = [c for c in ["type_local_raw","type_local","surface_reelle_bati","nb_pieces_dvf","valeur_fonciere","date_mutation","nom_commune","distance_m"] if c in df_local.columns]
+                            st.dataframe(df_local[cols_show].head(25), use_container_width=True)
 
-                progress_step(75, "📊 Calcul de la fourchette optimisée…", 0.70)
+                progress_step(75, "📊 Calcul de la fourchette optimisée…", 0.80)
 
                 algo_min = float(res["min"])
                 algo_max = float(res["max"])
@@ -954,10 +1089,15 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res 
 
                 fiabilite_label, poids_dvf = reliability_and_weight(nb_similaires)
                 note_guardrail = ""
+
+                # default
                 opt_min, opt_max = algo_min, algo_max
 
                 if nb_similaires < 2:
-                    note_guardrail = "Pas assez de comparables STRICTS : on reste proche de l’estimation immédiate."
+                    note_guardrail = (
+                        "Pas assez de comparables STRICTS sur 12 mois : "
+                        "on reste proche de l’estimation immédiate (pour éviter une incohérence)."
+                    )
                 else:
                     if "prix_m2" not in df_local.columns:
                         df_local["prix_m2"] = df_local["valeur_fonciere"] / df_local["surface_reelle_bati"]
@@ -966,18 +1106,23 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res 
                     dvf_m2_low = float(df_local["prix_m2"].quantile(0.25))
                     dvf_m2_high = float(df_local["prix_m2"].quantile(0.75))
 
-                    dvf_min = dvf_m2_low * float(used["surface"])
-                    dvf_max = dvf_m2_high * float(used["surface"])
+                    surface_used = float(st.session_state.surface)
+                    dvf_min = dvf_m2_low * surface_used
+                    dvf_max = dvf_m2_high * surface_used
+
+                    # Filet sécurité DVF: jamais inversé
                     if dvf_min > dvf_max:
                         dvf_min, dvf_max = dvf_max, dvf_min
 
+                    # Hybrid
                     opt_min = poids_dvf * dvf_min + (1 - poids_dvf) * algo_min
                     opt_max = poids_dvf * dvf_max + (1 - poids_dvf) * algo_max
 
+                    # tighten band
                     band_pct = target_band_pct(fiabilite_label)
                     full_width_target = max(1.0, ((opt_min + opt_max) / 2.0) * band_pct)
 
-                    abs_min_cap, abs_max_cap = abs_band_caps(used["bien_type"])
+                    abs_min_cap, abs_max_cap = abs_band_caps(target_type)
                     full_width_target = clamp(full_width_target, abs_min_cap, abs_max_cap)
                     full_width_target = min(full_width_target, algo_width * 0.82)
 
@@ -989,18 +1134,28 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res 
                     opt_min = max(opt_min, algo_min - slack)
                     opt_max = min(opt_max, algo_max + slack)
 
-                # ✅ Anti-déception borne basse
-                floor_min = algo_min * (1.0 - OPT_MIN_FLOOR_PCT)
-                if np.isfinite(floor_min) and opt_min < floor_min:
-                    shift = floor_min - opt_min
-                    opt_min = floor_min
-                    opt_max = opt_max + max(0.0, shift * 0.35)
+                    opt_center = (opt_min + opt_max) / 2.0
+                    ratio = opt_center / max(1.0, algo_center)
+                    if ratio > 1.18 or ratio < 0.82:
+                        note_guardrail = "Marché hétérogène : on tempère l’optimisation pour éviter une incohérence."
+                        pull = 0.45
+                        opt_min = (1 - pull) * opt_min + pull * algo_min
+                        opt_max = (1 - pull) * opt_max + pull * algo_max
 
-                # ✅ jamais inversé / NaN
+                # ✅ Filet #1 anti-déception (opt_min pas trop bas vs immédiate)
+                floor = algo_min * (1 - OPT_MIN_FLOOR_PCT)
+                if opt_min < floor:
+                    note_guardrail = note_guardrail or f"Protection anti-déception : l'optimisée ne descend pas sous {int(OPT_MIN_FLOOR_PCT*100)}% de la fourchette immédiate."
+                    # on remonte la bande sans changer sa largeur
+                    width = max(1.0, float(opt_max) - float(opt_min))
+                    opt_min = floor
+                    opt_max = opt_min + width
+
+                # ✅ Filet #2 (jamais inversé / NaN)
                 opt_min = float(opt_min)
                 opt_max = float(opt_max)
                 if not np.isfinite(opt_min) or not np.isfinite(opt_max):
-                    opt_min, opt_max = algo_min, algo_max
+                    opt_min, opt_max = float(res["min"]), float(res["max"])
                 if opt_min > opt_max:
                     opt_min, opt_max = opt_max, opt_min
 
@@ -1013,20 +1168,21 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res 
                         except Exception:
                             mois = "—"
 
-                        pv = r.get("pieces", pd.NA)
-                        if pd.isna(pv):
-                            pieces_str = "n/d"
+                        # pièces DVF si dispo
+                        p = r.get("nb_pieces_dvf", np.nan)
+                        if p is None or (isinstance(p, float) and not np.isfinite(p)):
+                            p_disp = "—"
                         else:
                             try:
-                                pieces_str = str(int(pv))
+                                p_disp = str(int(round(float(p))))
                             except Exception:
-                                pieces_str = "n/d"
+                                p_disp = "—"
 
                         preview_records.append(
                             {
                                 "type_local": str(r.get("type_local", "")),
                                 "surface": int(round(float(r.get("surface_reelle_bati", 0)))),
-                                "pieces": pieces_str,
+                                "pieces": p_disp,
                                 "prix": float(r.get("valeur_fonciere", 0)),
                                 "mois": mois,
                                 "commune": str(r.get("nom_commune", "Secteur")),
@@ -1034,14 +1190,14 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res 
                             }
                         )
 
-                progress_step(90, "🔍 Vérification de cohérence…", 0.45)
+                progress_step(90, "🔍 Vérification de cohérence…", 0.55)
 
                 dt = time.time() - t0
                 if dt < MIN_PROGRESS_SECONDS:
                     time.sleep(MIN_PROGRESS_SECONDS - dt)
 
                 progress.progress(100, text="✅ Terminé.")
-                time.sleep(0.15)
+                time.sleep(0.20)
 
                 st.session_state.hybrid_payload = {
                     "fiabilite_label": fiabilite_label,
@@ -1061,9 +1217,10 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res 
             finally:
                 progress.empty()
 
-            st.success(f"Merci {st.session_state.prenom} ✅ Je te contacte rapidement pour affiner.")
+            st.success(f"Merci {st.session_state.prenom} ✅ Je te contacte rapidement pour affiner et te donner des comparables précis.")
             st.rerun()
 
+    # Render optimized
     if st.session_state.hybrid_done and st.session_state.hybrid_payload:
         hp = st.session_state.hybrid_payload
 
@@ -1081,20 +1238,42 @@ if st.session_state.step == 2 and st.session_state.geo and st.session_state.res 
             f"<b>Indice de fiabilité :</b> {hp['fiabilite_label']}<br>"
             f"Basé sur <b>{hp['nb_similaires']}</b> biens comparables STRICTS (12 mois) "
             f"(rayon max : {hp.get('used_radius','—')} m)<br><br>"
+            f"Basé sur <b>plus d’une centaine de ventes officielles récentes</b> "
             f"(DVF – data.gouv.fr, dernière mise à jour : {hp['last_update']})"
             f"</div>",
             unsafe_allow_html=True,
         )
 
         if hp.get("note_guardrail"):
-            st.markdown(f"<div class='card accent-top'><b>Note :</b> {hp['note_guardrail']}</div>", unsafe_allow_html=True)
+            st.markdown(
+                f"<div class='card accent-top'><b>Note :</b> {hp['note_guardrail']}</div>",
+                unsafe_allow_html=True,
+            )
+
+        st.markdown(
+            "<div class='card'>"
+            "<b>Important :</b><br><br>"
+            "Cette estimation est basée sur les données officielles du marché.<br><br>"
+            "Toutefois, aucun algorithme ne peut évaluer :<br>"
+            "– l’état réel du bien<br>"
+            "– les travaux réalisés<br>"
+            "– l’isolation<br>"
+            "– les nuisances<br>"
+            "– l’exposition<br>"
+            "– l’extérieur / terrain<br><br>"
+            "<b>Pour obtenir une estimation précise, une visite du bien est indispensable.</b><br><br>"
+            "Je vous contacte personnellement pour affiner cette estimation et définir "
+            "la meilleure stratégie de mise en vente."
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
         if hp.get("similaires_preview"):
             st.markdown("<div class='card accent-top'>", unsafe_allow_html=True)
             st.markdown("### 🧾 Exemples de comparables (localisation volontairement vague)")
             for r in hp["similaires_preview"]:
                 st.markdown(
-                    f"- **{r['type_local']}** · **{r['surface']} m²** · p. **{r['pieces']}** · **{eur(r['prix'])}** · "
+                    f"- **{r['type_local']}** · **{r['surface']} m²** · **p. {r['pieces']}** · **{eur(r['prix'])}** · "
                     f"**{r['mois']}** · **{r['commune']}** (~{r['dist']} m)"
                 )
             st.markdown("</div>", unsafe_allow_html=True)

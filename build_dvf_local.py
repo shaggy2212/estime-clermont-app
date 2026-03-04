@@ -12,7 +12,8 @@ KEEP_INSEE = {
     "60042",  # Bailleval
 }
 
-KEEP_COLS = [
+# Colonnes indispensables (doivent exister)
+REQUIRED_COLS = [
     "date_mutation",
     "valeur_fonciere",
     "type_local",
@@ -21,6 +22,14 @@ KEEP_COLS = [
     "nom_commune",
     "longitude",
     "latitude",
+]
+
+# Colonnes optionnelles pour le nombre de pièces selon les variantes d’export DVF
+PIECES_CANDIDATES = [
+    "nombre_pieces_principales",          # le plus courant DVF
+    "nombre_pieces_principale",           # typo/variante rencontrée parfois
+    "nb_pieces_principales",              # autre variante
+    "nb_pieces",                          # export custom
 ]
 
 def main():
@@ -34,15 +43,26 @@ def main():
     outp = Path(args.output)
     outp.parent.mkdir(parents=True, exist_ok=True)
 
-    print("🔎 Vérification des colonnes…")
-    # On lit juste l'entête pour vérifier les colonnes sans charger tout le fichier
+    print("🔎 Vérification des colonnes (entête)…")
     head = pd.read_csv(inp, compression="gzip", nrows=1, low_memory=False)
-    missing = [c for c in KEEP_COLS if c not in head.columns]
-    if missing:
+    cols = set(head.columns)
+
+    missing_required = [c for c in REQUIRED_COLS if c not in cols]
+    if missing_required:
         raise ValueError(
-            f"Colonnes manquantes: {missing}\n"
-            f"Colonnes trouvées (extrait): {list(head.columns)[:60]}"
+            f"Colonnes indispensables manquantes: {missing_required}\n"
+            f"Colonnes trouvées (extrait): {list(head.columns)[:80]}"
         )
+
+    # On garde la 1ère colonne “pièces” disponible
+    pieces_col = next((c for c in PIECES_CANDIDATES if c in cols), None)
+    if pieces_col:
+        print(f"✅ Colonne pièces détectée : {pieces_col} (sera exportée en 'nb_pieces')")
+    else:
+        print("⚠️ Aucune colonne 'pièces' trouvée dans ce DVF. "
+              "Le parquet sera généré sans 'nb_pieces' (donc l’app affichera 'p. ?').")
+
+    usecols = REQUIRED_COLS + ([pieces_col] if pieces_col else [])
 
     total_kept = 0
     parts = []
@@ -51,12 +71,13 @@ def main():
     it = pd.read_csv(
         inp,
         compression="gzip",
-        usecols=KEEP_COLS,
+        usecols=usecols,
         chunksize=args.chunksize,
         low_memory=False,
     )
 
     for i, chunk in enumerate(it, start=1):
+        # code_commune: string 5 chars
         chunk["code_commune"] = chunk["code_commune"].astype(str).str.zfill(5)
         chunk = chunk[chunk["code_commune"].isin(KEEP_INSEE)].copy()
         if chunk.empty:
@@ -71,10 +92,30 @@ def main():
         chunk["longitude"] = pd.to_numeric(chunk["longitude"], errors="coerce")
         chunk["latitude"] = pd.to_numeric(chunk["latitude"], errors="coerce")
 
+        # pièces (si présent)
+        if pieces_col:
+            chunk["nb_pieces"] = pd.to_numeric(chunk[pieces_col], errors="coerce")
+        else:
+            chunk["nb_pieces"] = pd.NA
+
         # nettoyage
         chunk = chunk.dropna(subset=["date_mutation", "valeur_fonciere", "surface_reelle_bati", "longitude", "latitude"])
         chunk = chunk[(chunk["valeur_fonciere"] > 1000) & (chunk["surface_reelle_bati"] >= 10)]
         chunk = chunk[chunk["type_local"].isin(["Maison", "Appartement"])]
+
+        # garde uniquement colonnes finales (on standardise)
+        final_cols = [
+            "date_mutation",
+            "valeur_fonciere",
+            "code_commune",
+            "nom_commune",
+            "type_local",
+            "surface_reelle_bati",
+            "nb_pieces",
+            "longitude",
+            "latitude",
+        ]
+        chunk = chunk[final_cols].copy()
 
         if not chunk.empty:
             parts.append(chunk)
@@ -93,6 +134,7 @@ def main():
     df.to_parquet(outp, index=False)
 
     print(f"✅ Export OK: {outp} — {len(df):,} lignes")
+    print(f"ℹ️ Colonnes exportées: {list(df.columns)}")
 
 if __name__ == "__main__":
     main()

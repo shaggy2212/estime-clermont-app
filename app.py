@@ -21,7 +21,7 @@ ACCENT = "#FF7E79"
 SOFT = "#EAF2FF"
 
 # Progress UX (force visible)
-MIN_PROGRESS_SECONDS = 5.2  # rallongé (tu peux monter à 6.0 si tu veux)
+MIN_PROGRESS_SECONDS = 5.2
 
 # Gare Clermont-de-l'Oise (lon/lat)
 GARE_LON = 2.41767
@@ -49,7 +49,7 @@ GEOPF_SEARCH_URL = "https://data.geopf.fr/geocodage/search"
 DVF_LOCAL_PATH = Path("data/dvf_local.parquet")
 
 # Cache buster (change si besoin)
-DVF_CACHE_BUSTER = "v8"
+DVF_CACHE_BUSTER = "v9"
 
 # ===========================
 # Session state
@@ -57,21 +57,23 @@ DVF_CACHE_BUSTER = "v8"
 st.session_state.setdefault("geo", None)
 st.session_state.setdefault("result_payload", None)
 
-# Inputs (on laisse “visuellement” vide : on utilise 0 / "" et on valide)
 st.session_state.setdefault("area_name", AUTO_AREA)
 st.session_state.setdefault("area_locked", False)
 st.session_state.setdefault("detected_area", DEFAULT_AREA)
 
-st.session_state.setdefault("bien_type", None)  # on force choix
+# Inputs (visuellement "vides")
+st.session_state.setdefault("bien_type", None)
 st.session_state.setdefault("surface", 0.0)
 st.session_state.setdefault("etat", None)
 st.session_state.setdefault("nb_pieces", 0)
 st.session_state.setdefault("nb_chambres", 0)
 
+# Adresse
 st.session_state.setdefault("addr_typed", "")
 st.session_state.setdefault("addr_choice_display", "")
 st.session_state.setdefault("addr_choice", "")
 
+# Contact
 st.session_state.setdefault("prenom", "")
 st.session_state.setdefault("email", "")
 st.session_state.setdefault("telephone", "")
@@ -98,7 +100,6 @@ html, body, [class*="stApp"] {{
   font-family: 'Poppins', sans-serif !important;
 }}
 
-/* Force Streamlit icons (expander chevrons) */
 i.material-icons, span.material-icons, [class*="material-icons"] {{
   font-family: 'Material Icons' !important;
 }}
@@ -148,7 +149,6 @@ h2, h3 {{
 
 hr {{ border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 1.3rem 0; }}
 
-/* Primary buttons */
 .stButton > button,
 .stFormSubmitButton > button {{
     background: linear-gradient(135deg, {ACCENT} 0%, #ff5b66 100%) !important;
@@ -159,18 +159,6 @@ hr {{ border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 1.3rem 0; }}
     padding: 1.05rem 1.2rem !important;
     font-size: 1.07rem !important;
     box-shadow: 0 10px 26px rgba(255, 126, 121, 0.35) !important;
-}}
-.stButton > button:hover,
-.stFormSubmitButton > button:hover {{
-    box-shadow: 0 14px 34px rgba(255, 126, 121, 0.48) !important;
-    transform: translateY(-1px);
-}}
-
-/* Disabled-ish look (we still enforce in code) */
-button[disabled] {{
-  opacity: 0.45 !important;
-  filter: grayscale(0.3) !important;
-  cursor: not-allowed !important;
 }}
 </style>
 """,
@@ -257,12 +245,6 @@ def quartier_from_distance(distance_m: float) -> str:
 
 
 def normalize_type_local(x: Any) -> str:
-    """
-    Normalise les libellés DVF vers EXACTEMENT:
-      - "Maison"
-      - "Appartement"
-      - "Autre"
-    """
     s = str(x or "").strip().lower()
     s = s.replace("’", "'")
     s = s.replace("appartementement", "appartement")
@@ -303,7 +285,6 @@ def geopf_completion(text: str, postcode: str, city: str, max_resp: int = 7) -> 
             continue
         out.append(label)
 
-    # dedup
     seen = set()
     dedup = []
     for lab in out:
@@ -341,14 +322,12 @@ def load_dvf_local(_bust: str = DVF_CACHE_BUSTER) -> pd.DataFrame:
 
     df = pd.read_parquet(DVF_LOCAL_PATH)
 
-    # coercions
     df["date_mutation"] = pd.to_datetime(df.get("date_mutation"), errors="coerce")
     df["valeur_fonciere"] = pd.to_numeric(df.get("valeur_fonciere"), errors="coerce")
     df["surface_reelle_bati"] = pd.to_numeric(df.get("surface_reelle_bati"), errors="coerce")
     df["longitude"] = pd.to_numeric(df.get("longitude"), errors="coerce")
     df["latitude"] = pd.to_numeric(df.get("latitude"), errors="coerce")
 
-    # RAW + normalisation
     if "type_local" in df.columns:
         df["type_local_raw"] = df["type_local"]
     else:
@@ -357,7 +336,6 @@ def load_dvf_local(_bust: str = DVF_CACHE_BUSTER) -> pd.DataFrame:
 
     df["type_local"] = df["type_local_raw"].apply(normalize_type_local)
 
-    # filtres qualité
     df = df.dropna(subset=["date_mutation", "valeur_fonciere", "surface_reelle_bati", "longitude", "latitude", "type_local"])
     df = df[df["type_local"].isin(["Maison", "Appartement"])]
     df = df[(df["valeur_fonciere"] > 1000) & (df["surface_reelle_bati"] >= 10)]
@@ -371,12 +349,6 @@ def dvf_select_similaires_strict(
     bien_type: str,
     surface: float,
 ) -> Tuple[pd.DataFrame, int, float]:
-    """
-    STRICT:
-      - type_local strict
-      - surface strict (tol progressive)
-      - fallback strict (pas de mélange)
-    """
     if df_all.empty:
         return pd.DataFrame(), 0, 0.0
 
@@ -392,13 +364,11 @@ def dvf_select_similaires_strict(
     if df.empty:
         return pd.DataFrame(), 0, 0.0
 
-    # strict type
     df["type_local"] = df["type_local"].apply(normalize_type_local)
     df = df[df["type_local"] == target_type].copy()
     if df.empty:
         return pd.DataFrame(), 0, 0.0
 
-    # distance vectorized
     lat_arr = df["latitude"].to_numpy(dtype=float)
     lon_arr = df["longitude"].to_numpy(dtype=float)
     lat0 = float(lat)
@@ -413,7 +383,7 @@ def dvf_select_similaires_strict(
     dist = 2 * R * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
     df["distance_m"] = dist
 
-    radii = [600, 900, 1500, 2500, 3500]  # un peu plus fin au début
+    radii = [600, 900, 1500, 2500, 3500]
 
     if target_type == "Appartement":
         tolerances = [0.20, 0.25, 0.30, 0.35]
@@ -441,7 +411,6 @@ def dvf_select_similaires_strict(
             df_s["prix_m2"] = df_s["valeur_fonciere"] / df_s["surface_reelle_bati"]
             df_s = df_s.replace([np.inf, -np.inf], np.nan).dropna(subset=["prix_m2"])
 
-            # trim outliers if enough
             if len(df_s) >= 10:
                 q10 = df_s["prix_m2"].quantile(0.10)
                 q90 = df_s["prix_m2"].quantile(0.90)
@@ -457,7 +426,6 @@ def dvf_select_similaires_strict(
             break
 
     if best.empty:
-        # fallback strict: max 3, toujours strict type + tol max
         tol = tolerances[-1]
         low = surface * (1 - tol)
         high = surface * (1 + tol)
@@ -490,24 +458,17 @@ def reliability_label(n: int) -> str:
 
 
 def market_tension_index(df_local: pd.DataFrame, used_radius: int) -> Dict[str, Any]:
-    """
-    Score “cool” 0-100 basé sur :
-      - densité : nb ventes / km² dans le rayon
-      - récence : jours depuis dernière mutation (plus récent => plus tendu)
-      - dispersion : IQR prix/m² (plus dispersé => moins tendu / moins lisible)
-    """
     if df_local is None or df_local.empty or used_radius <= 0:
         return {"score": 0, "label": "🔴 Inconnu", "detail": "Pas assez de données"}
 
     n = int(len(df_local))
     area_km2 = (np.pi * (used_radius / 1000.0) ** 2)
-    density = n / max(1e-6, area_km2)  # ventes / km²
+    density = n / max(1e-6, area_km2)
 
     last_date = pd.to_datetime(df_local["date_mutation"]).max()
     days_since = (pd.Timestamp.utcnow().tz_localize(None) - pd.to_datetime(last_date).tz_localize(None)).days
     days_since = int(max(0, days_since))
 
-    # dispersion
     pm2 = pd.to_numeric(df_local.get("prix_m2"), errors="coerce")
     pm2 = pm2.replace([np.inf, -np.inf], np.nan).dropna()
     if pm2.empty:
@@ -517,16 +478,10 @@ def market_tension_index(df_local: pd.DataFrame, used_radius: int) -> Dict[str, 
         q75 = float(pm2.quantile(0.75))
         iqr = max(1.0, (q75 - q25))
         med = max(1.0, float(pm2.median()))
-        iqr_ratio = iqr / med  # 0.05 -> stable, 0.35 -> très dispersé
+        iqr_ratio = iqr / med
 
-    # Normalisations (heuristiques)
-    # densité: 0->0, 20->~60, 40->~85
     density_score = 100.0 * (1 - np.exp(-density / 18.0))
-
-    # récence: 0j=100, 90j=~50, 180j=~25
     recency_score = 100.0 * np.exp(-days_since / 95.0)
-
-    # dispersion: 0.08=~90, 0.20=~55, 0.35=~30
     dispersion_score = 100.0 * np.exp(-iqr_ratio / 0.18)
 
     score = 0.45 * density_score + 0.35 * recency_score + 0.20 * dispersion_score
@@ -546,42 +501,24 @@ def market_tension_index(df_local: pd.DataFrame, used_radius: int) -> Dict[str, 
 
 
 def compute_adjustments(bien_type: str, surface: float, nb_pieces: int, nb_chambres: int, etat: str, distance_m: float) -> Dict[str, float]:
-    """
-    Ajustements “soft” (on évite de sur-influencer pièces/chambres vu qu’on n’a pas la colonne DVF).
-    """
-    # état
     etat_factor = {"À rénover": 0.88, "Moyen": 1.00, "Bon": 1.05, "Rénové": 1.10}.get(etat, 1.00)
 
-    # pièces / chambres (soft caps)
     pieces_delta = (nb_pieces - 3) * 0.015
     chambres_delta = (nb_chambres - 2) * 0.02
     pieces_factor = float(clamp(1.0 + pieces_delta, 0.93, 1.08))
     chambres_factor = float(clamp(1.0 + chambres_delta, 0.94, 1.10))
 
-    # gare (soft)
     gare_factor = 1 + min(0.06, 0.45 / (1 + distance_m / 1000))
 
-    # surface (petit effet d’échelle)
-    # plus grand => légère décote €/m² ; petit => légère prime
     if bien_type == "Appartement":
         scale = float(clamp(1.02 - (surface - 55) * 0.0009, 0.94, 1.06))
     else:
         scale = float(clamp(1.02 - (surface - 95) * 0.0007, 0.93, 1.06))
 
-    return {
-        "etat": etat_factor,
-        "pieces": pieces_factor,
-        "chambres": chambres_factor,
-        "gare": float(gare_factor),
-        "scale": scale,
-    }
+    return {"etat": etat_factor, "pieces": pieces_factor, "chambres": chambres_factor, "gare": float(gare_factor), "scale": scale}
 
 
-def band_from_reliability_and_tension(n: int, tension_score: int, bien_type: str) -> Tuple[float, float]:
-    """
-    Retourne (band_pct_full_width, abs_caps_full_width)
-    """
-    # base width by comparables count
+def band_from_reliability_and_tension(n: int, tension_score: int, bien_type: str) -> Tuple[float, Tuple[float, float]]:
     if n > 15:
         pct = 0.060
     elif n >= 8:
@@ -593,8 +530,6 @@ def band_from_reliability_and_tension(n: int, tension_score: int, bien_type: str
     else:
         pct = 0.140
 
-    # tension => plus tendu = fourchette légèrement plus serrée
-    # détendu => un peu plus large
     if tension_score >= 75:
         pct *= 0.90
     elif tension_score >= 55:
@@ -604,7 +539,6 @@ def band_from_reliability_and_tension(n: int, tension_score: int, bien_type: str
     else:
         pct *= 1.08
 
-    # caps (FULL width)
     if normalize_type_local(bien_type) == "Appartement":
         abs_min, abs_max = 6500.0, 15000.0
     else:
@@ -623,26 +557,11 @@ def compute_micro_market_estimate(
     nb_chambres: int,
     etat: str,
 ) -> Dict[str, Any]:
-    """
-    Estimation one-shot :
-      - sélection comparables DVF strict
-      - base = médiane €/m² locale * surface
-      - ajustements (état/pièces/chambres/gare/scale)
-      - hybrid tension: petit tilt + band width
-    """
     distance_m = haversine_m(lat, lon, GARE_LAT, GARE_LON)
     quartier = quartier_from_distance(distance_m)
 
-    # Comparables
-    df_local, used_radius, used_tol = dvf_select_similaires_strict(
-        df_all=df_all,
-        lat=float(lat),
-        lon=float(lon),
-        bien_type=bien_type,
-        surface=float(surface),
-    )
+    df_local, used_radius, used_tol = dvf_select_similaires_strict(df_all, lat, lon, bien_type, surface)
 
-    # ultimate enforcement
     target_type = normalize_type_local(bien_type)
     if not df_local.empty:
         df_local["type_local"] = df_local["type_local"].apply(normalize_type_local)
@@ -664,17 +583,11 @@ def compute_micro_market_estimate(
     n = int(len(df_local))
     rel = reliability_label(n)
 
-    # Base price from DVF micro market
     if n >= 2:
         pm2_med = float(df_local["prix_m2"].median())
-        pm2_q25 = float(df_local["prix_m2"].quantile(0.25))
-        pm2_q75 = float(df_local["prix_m2"].quantile(0.75))
     elif n == 1:
         pm2_med = float(df_local["prix_m2"].iloc[0])
-        pm2_q25 = pm2_med * 0.97
-        pm2_q75 = pm2_med * 1.03
     else:
-        # fallback: mini base “quartier” (pour éviter crash)
         base_table = {
             "Centre-ville": {"Maison": 2100, "Appartement": 2500},
             "Nord (Gare)": {"Maison": 1950, "Appartement": 2200},
@@ -683,21 +596,14 @@ def compute_micro_market_estimate(
             "Ouest (Neuf)": {"Maison": 2450, "Appartement": 2800},
         }
         pm2_med = float(base_table[quartier][target_type])
-        pm2_q25 = pm2_med * 0.95
-        pm2_q75 = pm2_med * 1.05
 
     base_price = pm2_med * surface
-
-    # adjustments
     adj = compute_adjustments(target_type, surface, nb_pieces, nb_chambres, etat, distance_m)
     adj_factor = adj["etat"] * adj["pieces"] * adj["chambres"] * adj["gare"] * adj["scale"]
 
-    # tension
     tension = market_tension_index(df_local, used_radius if used_radius else 0)
-
-    # hybrid tilt based on tension (micro)
-    # tendu => + up to +2.2% ; détendu => down to -1.8%
     tscore = int(tension.get("score", 0))
+
     if tscore >= 75:
         tilt = 0.022
     elif tscore >= 55:
@@ -709,7 +615,6 @@ def compute_micro_market_estimate(
 
     center = base_price * adj_factor * (1.0 + tilt)
 
-    # band
     band_pct, (abs_min, abs_max) = band_from_reliability_and_tension(n, tscore, target_type)
     full_width = max(1.0, center * band_pct)
     full_width = clamp(full_width, abs_min, abs_max)
@@ -717,7 +622,6 @@ def compute_micro_market_estimate(
     est_min = center - full_width / 2.0
     est_max = center + full_width / 2.0
 
-    # safety: no inverted / nan
     est_min = float(est_min)
     est_max = float(est_max)
     if not np.isfinite(est_min) or not np.isfinite(est_max):
@@ -725,11 +629,9 @@ def compute_micro_market_estimate(
     if est_min > est_max:
         est_min, est_max = est_max, est_min
 
-    # last update
     max_date = df_all["date_mutation"].max()
     last_update = max_date.strftime("%B %Y") if pd.notna(max_date) else "—"
 
-    # preview
     preview = []
     if not df_local.empty:
         prev = df_local.sort_values(["distance_m", "date_mutation"], ascending=[True, False]).head(6)
@@ -755,8 +657,6 @@ def compute_micro_market_estimate(
         "quartier": quartier,
         "distance_gare_m": int(round(distance_m)),
         "pm2_med": float(pm2_med),
-        "pm2_q25": float(pm2_q25),
-        "pm2_q75": float(pm2_q75),
         "adj": adj,
         "adj_factor": float(adj_factor),
         "tilt": float(tilt),
@@ -770,7 +670,6 @@ def compute_micro_market_estimate(
         "last_update": last_update,
         "preview": preview,
     }
-
 
 # ===========================
 # Debug tools
@@ -791,7 +690,6 @@ if DEBUG:
                 st.rerun()
         st.caption(f"DVF cache buster: {DVF_CACHE_BUSTER}")
 
-
 # ===========================
 # Header
 # ===========================
@@ -803,10 +701,9 @@ st.markdown(
     f"<div style='text-align:center; margin-bottom:0.6rem;'><span class='badge'>Secteur : {badge_label}</span></div>",
     unsafe_allow_html=True,
 )
-
 st.markdown(
-    "<div class='card accent-top'><b>Objectif :</b> te sortir une <b>fourchette crédible</b> basée sur les "
-    "<b>ventes DVF autour du bien</b> + un <b>indice de tension</b> (densité / récence / dispersion).</div>",
+    "<div class='card accent-top'><b>Objectif :</b> une fourchette crédible basée sur les <b>ventes DVF autour du bien</b> "
+    "+ un <b>indice de tension</b> (densité / récence / dispersion).</div>",
     unsafe_allow_html=True,
 )
 st.markdown("<hr/>", unsafe_allow_html=True)
@@ -820,17 +717,17 @@ with colR:
     st.markdown("## 💎 Ce que vous obtenez")
     st.markdown(
         "<div class='card accent-top'>"
-        "✅ <b>Une estimation en 1 step</b> (bien + contact)<br/>"
+        "✅ <b>Estimation en 1 seule étape</b> (bien + contact)<br/>"
         "✅ <b>Micro-marché DVF</b> : médiane €/m² autour du bien<br/>"
         "✅ <b>Comparables stricts</b> : type + surface + rayon<br/>"
         "✅ <b>Indice de tension</b> : densité / récence / dispersion<br/>"
-        "✅ Fourchette ajustée par <b>caractéristiques du bien</b> (état, pièces, chambres, proximité gare)"
+        "✅ Ajustement par <b>caractéristiques</b> (état, pièces, chambres, proximité gare)"
         "</div>",
         unsafe_allow_html=True,
     )
     st.markdown(
-        "<div class='card soft'><b>Transparence :</b> la DVF (data.gouv.fr) ne contient pas toutes les infos "
-        "(ex : pièces). On utilise donc DVF pour le <b>prix réel</b> + tes critères pour affiner, sans sur-jouer.</div>",
+        "<div class='card soft'><b>Transparence :</b> la DVF ne contient pas toutes les infos (ex : pièces). "
+        "On utilise donc DVF pour le <b>prix réel</b> + vos critères pour affiner.</div>",
         unsafe_allow_html=True,
     )
 
@@ -854,58 +751,61 @@ with colL:
         unsafe_allow_html=True,
     )
 
-    # --- Form ---
+    # ==============
+    # Adresse (HORS form) => callback autorisé ✅
+    # ==============
+    st.markdown("### 📍 Adresse")
+    st.text_input("Tapez votre adresse", placeholder="Ex : 5 Rue du Chemin Blanc", key="addr_typed")
+
+    typed = (st.session_state.addr_typed or "").strip()
+    suggestions_display: List[str] = []
+
+    if len(typed) >= 3:
+        if st.session_state.area_name == AUTO_AREA:
+            for area_name, info in AREAS.items():
+                try:
+                    labs = geopf_completion(typed, postcode=info["postcode"], city=info["city"], max_resp=5)
+                except Exception:
+                    labs = []
+                for lab in labs:
+                    suggestions_display.append(f"{area_name} — {lab}")
+        else:
+            try:
+                labs = geopf_completion(typed, postcode=ai["postcode"], city=ai["city"], max_resp=8)
+            except Exception:
+                labs = []
+            suggestions_display = labs[:]
+
+    if suggestions_display:
+        prev_display = st.session_state.get("addr_choice_display", "")
+        default_index = suggestions_display.index(prev_display) if prev_display in suggestions_display else 0
+        st.selectbox(
+            "Suggestions",
+            suggestions_display,
+            index=default_index,
+            key="addr_choice_display",
+            on_change=on_addr_choice_display_change,  # ✅ OK car hors form
+        )
+    else:
+        st.session_state.addr_choice_display = ""
+        st.session_state.addr_choice = ""
+
+    st.markdown("<hr/>", unsafe_allow_html=True)
+
+    # ==============
+    # Form (bien + contact + submit)
+    # ==============
     with st.form("one_step_form", clear_on_submit=False):
         c1, c2 = st.columns(2)
         with c1:
             st.selectbox("Type de bien", ["Maison", "Appartement"], index=None, key="bien_type", placeholder="Choisir…")
             st.number_input("Surface (m²)", min_value=0.0, max_value=500.0, step=1.0, value=float(st.session_state.surface or 0.0), key="surface")
             st.selectbox("État du bien", ["À rénover", "Moyen", "Bon", "Rénové"], index=None, key="etat", placeholder="Choisir…")
-
         with c2:
             st.number_input("Nombre de pièces", min_value=0, max_value=12, step=1, value=int(st.session_state.nb_pieces or 0), key="nb_pieces")
             st.number_input("Nombre de chambres", min_value=0, max_value=10, step=1, value=int(st.session_state.nb_chambres or 0), key="nb_chambres")
-            st.markdown("<div class='small-note'>On utilise DVF pour le prix réel, et tes critères pour affiner.</div>", unsafe_allow_html=True)
+            st.markdown("<div class='small-note'>DVF = prix réel. Vos critères = ajustements (soft).</div>", unsafe_allow_html=True)
 
-        st.markdown("### 📍 Adresse")
-        st.text_input("Tapez votre adresse", placeholder="Ex : 5 Rue du Chemin Blanc", key="addr_typed")
-
-        typed = (st.session_state.addr_typed or "").strip()
-        suggestions_display: List[str] = []
-
-        # Suggestions “dropdown-like”
-        if len(typed) >= 3:
-            if st.session_state.area_name == AUTO_AREA:
-                for area_name, info in AREAS.items():
-                    try:
-                        labs = geopf_completion(typed, postcode=info["postcode"], city=info["city"], max_resp=5)
-                    except Exception:
-                        labs = []
-                    for lab in labs:
-                        suggestions_display.append(f"{area_name} — {lab}")
-            else:
-                try:
-                    labs = geopf_completion(typed, postcode=ai["postcode"], city=ai["city"], max_resp=8)
-                except Exception:
-                    labs = []
-                suggestions_display = labs[:]
-
-        if suggestions_display:
-            prev_display = st.session_state.get("addr_choice_display", "")
-            default_index = suggestions_display.index(prev_display) if prev_display in suggestions_display else 0
-            st.selectbox(
-                "Suggestions",
-                suggestions_display,
-                index=default_index,
-                key="addr_choice_display",
-                on_change=on_addr_choice_display_change,
-            )
-        else:
-            # pas de suggestion => pas d’adresse validée
-            st.session_state.addr_choice_display = ""
-            st.session_state.addr_choice = ""
-
-        st.markdown("<hr/>", unsafe_allow_html=True)
         st.markdown("### 📩 Vos coordonnées")
         cc1, cc2 = st.columns(2)
         with cc1:
@@ -915,15 +815,9 @@ with colL:
             st.text_input("Téléphone", key="telephone", placeholder="06…")
             st.checkbox("J’accepte d’être recontacté au sujet de cette estimation (sans spam).", key="consent")
 
-        # bouton “grisé” : Streamlit ne permet pas un vrai disabled sur form_submit_button
-        # => on laisse le bouton, mais on refuse si incomplet (UX ok + message clair)
         submitted = st.form_submit_button("🚀 Obtenir mon estimation (micro-marché DVF)", use_container_width=True)
 
-    # ===========================
-    # Submit handling
-    # ===========================
     if submitted:
-        # Validation “tous champs remplis”
         missing = []
         if st.session_state.bien_type not in ["Maison", "Appartement"]:
             missing.append("Type de bien")
@@ -944,13 +838,11 @@ with colL:
             st.error("Il manque : " + ", ".join(missing))
             st.stop()
 
-        # Détection commune + libellé
+        # lock commune si auto + suggestion
         effective_area, ai = get_effective_area()
-
         detected_area, detected_label = parse_display_choice(st.session_state.get("addr_choice_display", ""))
         addr_label = detected_label if detected_label else (st.session_state.addr_choice or typed)
 
-        # si auto, on lock sur la commune de la suggestion
         if st.session_state.area_name == AUTO_AREA and detected_area:
             st.session_state.detected_area = detected_area
             st.session_state.area_locked = True
@@ -964,7 +856,7 @@ with colL:
             geo = None
 
         if not geo:
-            st.error("Impossible de géocoder l’adresse. Choisis une suggestion (avec numéro + rue) et réessaie.")
+            st.error("Impossible de géocoder l’adresse. Choisis une suggestion (numéro + rue) et réessaie.")
             st.stop()
 
         label_low = norm(geo.get("label") or "")
@@ -987,8 +879,7 @@ with colL:
                 st.warning("⚠️ Base DVF locale introuvable (fichier parquet manquant).")
                 st.stop()
 
-            progress_step(35, "🧭 Géolocalisation & périmètre…", 0.55)
-            progress_step(60, "🏡 Sélection de comparables stricts…", 0.75)
+            progress_step(55, "🏡 Sélection de comparables stricts…", 0.85)
 
             payload = compute_micro_market_estimate(
                 df_all=df_all,
@@ -1001,9 +892,8 @@ with colL:
                 etat=str(st.session_state.etat),
             )
 
-            progress_step(82, "🔥 Calcul de l’indice de tension & fourchette finale…", 0.80)
+            progress_step(82, "🔥 Tension du marché & fourchette finale…", 0.85)
 
-            # enforce minimum UX duration
             dt = time.time() - t0
             if dt < MIN_PROGRESS_SECONDS:
                 time.sleep(MIN_PROGRESS_SECONDS - dt)
@@ -1021,7 +911,7 @@ with colL:
         st.rerun()
 
 # ===========================
-# Result rendering
+# Results
 # ===========================
 if st.session_state.result_payload and st.session_state.geo:
     st.markdown("<hr/>", unsafe_allow_html=True)
@@ -1038,22 +928,23 @@ if st.session_state.result_payload and st.session_state.geo:
         )
     with m2:
         st.markdown(
-            f"<div class='metric'><p class='k'>Indice de fiabilité</p><p class='v'>{hp['reliability']}</p></div>",
+            f"<div class='metric'><p class='k'>Fiabilité</p><p class='v'>{hp['reliability']}</p></div>",
             unsafe_allow_html=True,
         )
     with m3:
         tens = hp.get("tension", {})
         st.markdown(
-            f"<div class='metric'><p class='k'>Tension du marché</p><p class='v'>{tens.get('label','—')} ({tens.get('score','—')}/100)</p></div>",
+            f"<div class='metric'><p class='k'>Tension</p><p class='v'>{tens.get('label','—')} ({tens.get('score','—')}/100)</p></div>",
             unsafe_allow_html=True,
         )
 
     st.markdown(
         f"<div class='card soft'>"
-        f"<b>Adresse géocodée :</b> {geo.get('label','')}<br/>"
+        f"<b>Adresse :</b> {geo.get('label','')}<br/>"
         f"<b>Quartier (proxy) :</b> {hp.get('quartier','—')} — <b>Distance gare :</b> {hp.get('distance_gare_m','—')} m<br/>"
-        f"<b>Base micro-marché (DVF) :</b> ~{eur(hp.get('pm2_med',0))} / m² (médiane)<br/>"
-        f"<b>Comparables :</b> {hp.get('n',0)} ventes (12 mois) — rayon max : {hp.get('used_radius','—')} m"
+        f"<b>Base DVF (médiane) :</b> ~{eur(hp.get('pm2_med',0))} / m²<br/>"
+        f"<b>Comparables :</b> {hp.get('n',0)} ventes (12 mois) — rayon max : {hp.get('used_radius','—')} m<br/>"
+        f"<b>DVF dernière mise à jour :</b> {hp.get('last_update','—')}"
         f"</div>",
         unsafe_allow_html=True,
     )
@@ -1072,24 +963,7 @@ if st.session_state.result_payload and st.session_state.geo:
             )
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # Debug details (step result)
     if DEBUG:
-        with st.expander("🧪 Debug (détails estimation)", expanded=False):
-            st.write("Payload :", hp)
-            st.write("Adresse :", geo)
-
-            # DVF global stats last 12 months
-            try:
-                df_all = load_dvf_local(st.session_state.get("_dvf_bust_manual", DVF_CACHE_BUSTER))
-                max_date_dbg = df_all["date_mutation"].max()
-                cutoff_dbg = max_date_dbg - pd.Timedelta(days=365)
-                df12 = df_all[df_all["date_mutation"] >= cutoff_dbg].copy()
-
-                st.write("Valeurs RAW (12 mois) :")
-                if "type_local_raw" in df12.columns:
-                    st.write(df12["type_local_raw"].astype(str).str.strip().value_counts().head(30))
-
-                st.write("Valeurs NORMALISÉES (12 mois) :")
-                st.write(df12["type_local"].value_counts())
-            except Exception as e:
-                st.warning(f"Debug DVF impossible: {e}")
+        with st.expander("🧪 Debug (payload)", expanded=False):
+            st.write(hp)
+            st.write("geo:", geo)

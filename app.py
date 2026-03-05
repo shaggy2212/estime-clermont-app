@@ -488,13 +488,13 @@ def market_tension_index(df_local: pd.DataFrame, used_radius: int) -> Dict[str, 
     score = float(clamp(score, 0.0, 100.0))
 
     if score >= 75:
-        label = "🔥 Très tendu"
+        label = "🔥 Très attractif"
     elif score >= 55:
-        label = "⚡ Tendu"
+        label = "⚡ Attractif"
     elif score >= 35:
         label = "🙂 Équilibré"
     else:
-        label = "🧊 Détendu"
+        label = "🧊 Plus calme"
 
     detail = f"Densité ~{density:.1f}/km² · Dernière vente {days_since}j · Dispersion IQR ~{iqr_ratio:.2f}"
     return {"score": int(round(score)), "label": label, "detail": detail}
@@ -691,19 +691,25 @@ if DEBUG:
         st.caption(f"DVF cache buster: {DVF_CACHE_BUSTER}")
 
 # ===========================
-# Header
+# Header (copywriting)
 # ===========================
 effective_area, effective_info = get_effective_area()
 badge_label = f"{effective_area} ({effective_info['postcode']})"
 
-st.markdown("<h1>🏠 Estimation micro-marché (DVF)</h1>", unsafe_allow_html=True)
+st.markdown("<h1>Combien vaut vraiment votre bien à Clermont-de-l'Oise ?</h1>", unsafe_allow_html=True)
+st.markdown(
+    "<div style='text-align:center; margin-bottom:0.6rem;'>"
+    "<span class='small-note'><b>Pas une estimation au doigt mouillé.</b> Une vraie fourchette, basée sur les ventes réelles de votre quartier.</span>"
+    "</div>",
+    unsafe_allow_html=True,
+)
 st.markdown(
     f"<div style='text-align:center; margin-bottom:0.6rem;'><span class='badge'>Secteur : {badge_label}</span></div>",
     unsafe_allow_html=True,
 )
 st.markdown(
-    "<div class='card accent-top'><b>Objectif :</b> une fourchette crédible basée sur les <b>ventes DVF autour du bien</b> "
-    "+ un <b>indice de tension</b> (densité / récence / dispersion).</div>",
+    "<div class='card accent-top'><b>Objectif :</b> En 2 minutes, vous obtenez une estimation basée sur les dernières ventes de biens similaires "
+    "dans votre secteur, pas sur un algorithme générique qui se base sur les ventes nationales et confond Clermont-de-l'Oise avec Clermont-Ferrand 😃</div>",
     unsafe_allow_html=True,
 )
 st.markdown("<hr/>", unsafe_allow_html=True)
@@ -714,29 +720,32 @@ st.markdown("<hr/>", unsafe_allow_html=True)
 colL, colR = st.columns([1.25, 0.95], gap="large")
 
 with colR:
-    st.markdown("## 💎 Ce que vous obtenez")
+    st.markdown("## Ce que vous recevez, concrètement")
     st.markdown(
         "<div class='card accent-top'>"
-        "✅ <b>Estimation en 1 seule étape</b> (bien + contact)<br/>"
-        "✅ <b>Micro-marché DVF</b> : médiane €/m² autour du bien<br/>"
-        "✅ <b>Comparables stricts</b> : type + surface + rayon<br/>"
-        "✅ <b>Indice de tension</b> : densité / récence / dispersion<br/>"
-        "✅ Ajustement par <b>caractéristiques</b> (état, pièces, chambres, proximité gare)"
+        "✅ Une fourchette de prix réaliste, basée sur les ventes récentes de votre secteur<br/>"
+        "✅ Le prix médian au m² pratiqué dans votre quartier ces 12 derniers mois<br/>"
+        "✅ Des biens comparables au vôtre (même type, surface similaire, même zone)<br/>"
+        "✅ Un indice d’attractivité de votre secteur (est-ce que les biens partent vite ? À quel prix ?)<br/>"
+        "✅ Une estimation affinée selon l'état, la surface, les pièces et la localisation de votre bien"
         "</div>",
         unsafe_allow_html=True,
     )
     st.markdown(
-        "<div class='card soft'><b>Transparence :</b> la DVF ne contient pas toutes les infos (ex : pièces). "
-        "On utilise donc DVF pour le <b>prix réel</b> + vos critères pour affiner.</div>",
+        "<div class='card soft'>"
+        "🔎 <b>Une estimation honnête, pas magique.</b> Les données utilisées viennent des ventes officiellement enregistrées sur votre secteur "
+        "(source : data.gouv.fr, màj octobre 2025). Certaines infos comme le nombre de pièces ne sont pas toujours disponibles dans ces données, "
+        "donc on croise avec ce que vous nous indiquez pour rester au plus juste. Pas de chiffre sorti du chapeau."
+        "</div>",
         unsafe_allow_html=True,
     )
 
 with colL:
-    st.markdown("## 🧾 Informations du bien + contact")
+    st.markdown("## Parlez-moi de votre bien")
 
     # Commune
     area_options = [AUTO_AREA] + list(AREAS.keys())
-    st.selectbox("Commune", area_options, key="area_name")
+    st.selectbox("Votre commune", area_options, key="area_name")
 
     if st.session_state.area_name in AREAS:
         st.session_state.detected_area = st.session_state.area_name
@@ -754,8 +763,8 @@ with colL:
     # ==============
     # Adresse (HORS form) => callback autorisé ✅
     # ==============
-    st.markdown("### 📍 Adresse")
-    st.text_input("Tapez votre adresse", placeholder="Ex : 5 Rue du Chemin Blanc", key="addr_typed")
+    st.markdown("### 📍 Adresse du bien")
+    st.text_input("Adresse du bien", placeholder="Ex : 5 Rue du Chemin Blanc", key="addr_typed")
 
     typed = (st.session_state.addr_typed or "").strip()
     suggestions_display: List[str] = []
@@ -784,7 +793,7 @@ with colL:
             suggestions_display,
             index=default_index,
             key="addr_choice_display",
-            on_change=on_addr_choice_display_change,  # ✅ OK car hors form
+            on_change=on_addr_choice_display_change,
         )
     else:
         st.session_state.addr_choice_display = ""
@@ -798,39 +807,47 @@ with colL:
     with st.form("one_step_form", clear_on_submit=False):
         c1, c2 = st.columns(2)
         with c1:
-            st.selectbox("Type de bien", ["Maison", "Appartement"], index=None, key="bien_type", placeholder="Choisir…")
-            st.number_input("Surface (m²)", min_value=0.0, max_value=500.0, step=1.0, value=float(st.session_state.surface or 0.0), key="surface")
-            st.selectbox("État du bien", ["À rénover", "Moyen", "Bon", "Rénové"], index=None, key="etat", placeholder="Choisir…")
+            st.selectbox("Mon bien est...", ["Maison", "Appartement"], index=None, key="bien_type", placeholder="Choisir…")
+            st.number_input("Surface habitable", min_value=0.0, max_value=500.0, step=1.0, value=float(st.session_state.surface or 0.0), key="surface")
+            st.selectbox("État général du bien", ["À rénover", "Moyen", "Bon", "Rénové"], index=None, key="etat", placeholder="Choisir…")
         with c2:
             st.number_input("Nombre de pièces", min_value=0, max_value=12, step=1, value=int(st.session_state.nb_pieces or 0), key="nb_pieces")
-            st.number_input("Nombre de chambres", min_value=0, max_value=10, step=1, value=int(st.session_state.nb_chambres or 0), key="nb_chambres")
-            st.markdown("<div class='small-note'>DVF = prix réel. Vos critères = ajustements (soft).</div>", unsafe_allow_html=True)
+            st.number_input("Dont chambres", min_value=0, max_value=10, step=1, value=int(st.session_state.nb_chambres or 0), key="nb_chambres")
+            st.markdown(
+                "<div class='small-note'>L’état influe sur le prix final, on s'en sert pour affiner l'estimation. "
+                "Promis, on ne vous juge pas si c'est \"à rénover\" 😄</div>",
+                unsafe_allow_html=True,
+            )
 
-        st.markdown("### 📩 Vos coordonnées")
+        st.markdown("### Où envoyer votre estimation ?")
         cc1, cc2 = st.columns(2)
         with cc1:
             st.text_input("Prénom", key="prenom", placeholder="Ex : Marie")
             st.text_input("Email", key="email", placeholder="exemple@mail.com")
         with cc2:
             st.text_input("Téléphone", key="telephone", placeholder="06…")
-            st.checkbox("J’accepte d’être recontacté au sujet de cette estimation (sans spam).", key="consent")
+            st.checkbox(
+                "J’accepte qu'Hakim me recontacte pour affiner cette estimation avec moi. "
+                "Pas de relance tous les matins, promis 🙂.",
+                key="consent",
+            )
 
-        submitted = st.form_submit_button("🚀 Obtenir mon estimation (micro-marché DVF)", use_container_width=True)
+        submitted = st.form_submit_button("Voir l'estimation de mon bien →", use_container_width=True)
 
     if submitted:
         missing = []
         if st.session_state.bien_type not in ["Maison", "Appartement"]:
-            missing.append("Type de bien")
+            missing.append("Mon bien est…")
         if float(st.session_state.surface or 0) <= 0:
-            missing.append("Surface")
+            missing.append("Surface habitable")
         if st.session_state.etat not in ["À rénover", "Moyen", "Bon", "Rénové"]:
-            missing.append("État")
+            missing.append("État général du bien")
         if int(st.session_state.nb_pieces or 0) <= 0:
             missing.append("Nombre de pièces")
         if not (st.session_state.prenom and st.session_state.email and st.session_state.telephone):
             missing.append("Coordonnées (prénom/email/téléphone)")
         if not st.session_state.consent:
-            missing.append("Consentement")
+            missing.append("Autorisation de contact")
         if not st.session_state.addr_choice_display:
             missing.append("Adresse (sélectionnez une suggestion)")
 
@@ -866,20 +883,20 @@ with colL:
 
         # Progress
         t0 = time.time()
-        progress = st.progress(0, text="🔎 Analyse du micro-marché DVF…")
+        progress = st.progress(0, text="🔎 Analyse des ventes récentes autour de votre bien…")
 
         def progress_step(pct: int, txt: str, min_sleep: float = 0.35):
             progress.progress(pct, text=txt)
             time.sleep(min_sleep)
 
         try:
-            progress_step(10, "📦 Chargement de la base DVF locale…", 0.55)
+            progress_step(10, "📦 Chargement des ventes officielles (DVF)…", 0.65)
             df_all = load_dvf_local(st.session_state.get("_dvf_bust_manual", DVF_CACHE_BUSTER))
             if df_all.empty:
                 st.warning("⚠️ Base DVF locale introuvable (fichier parquet manquant).")
                 st.stop()
 
-            progress_step(55, "🏡 Sélection de comparables stricts…", 0.85)
+            progress_step(55, "🏡 Recherche de biens réellement comparables…", 1.05)
 
             payload = compute_micro_market_estimate(
                 df_all=df_all,
@@ -892,13 +909,13 @@ with colL:
                 etat=str(st.session_state.etat),
             )
 
-            progress_step(82, "🔥 Tension du marché & fourchette finale…", 0.85)
+            progress_step(82, "📊 Calcul de la fourchette + attractivité du secteur…", 1.05)
 
             dt = time.time() - t0
             if dt < MIN_PROGRESS_SECONDS:
                 time.sleep(MIN_PROGRESS_SECONDS - dt)
 
-            progress.progress(100, text="✅ Estimation prête.")
+            progress.progress(100, text="✅ Votre estimation est prête.")
             time.sleep(0.25)
 
             st.session_state.geo = geo
@@ -907,15 +924,15 @@ with colL:
         finally:
             progress.empty()
 
-        st.success(f"Merci {st.session_state.prenom} ✅ Estimation générée (micro-marché DVF).")
+        st.success(f"Merci {st.session_state.prenom} ✅ Votre estimation vient d’être calculée.")
         st.rerun()
 
 # ===========================
-# Results
+# Results (copywriting + disclaimer)
 # ===========================
 if st.session_state.result_payload and st.session_state.geo:
     st.markdown("<hr/>", unsafe_allow_html=True)
-    st.markdown("## ✨ Votre estimation (micro-marché DVF)")
+    st.markdown("## ✨ Votre estimation")
 
     geo = st.session_state.geo
     hp = st.session_state.result_payload
@@ -923,29 +940,46 @@ if st.session_state.result_payload and st.session_state.geo:
     m1, m2, m3 = st.columns(3, gap="medium")
     with m1:
         st.markdown(
-            f"<div class='metric'><p class='k'>Fourchette</p><p class='v'>{eur(hp['est_min'])} – {eur(hp['est_max'])}</p></div>",
+            f"<div class='metric'><p class='k'>Fourchette estimée</p><p class='v'>{eur(hp['est_min'])} – {eur(hp['est_max'])}</p></div>",
             unsafe_allow_html=True,
         )
     with m2:
         st.markdown(
-            f"<div class='metric'><p class='k'>Fiabilité</p><p class='v'>{hp['reliability']}</p></div>",
+            f"<div class='metric'><p class='k'>Fiabilité des données</p><p class='v'>{hp['reliability']}</p></div>",
             unsafe_allow_html=True,
         )
     with m3:
         tens = hp.get("tension", {})
         st.markdown(
-            f"<div class='metric'><p class='k'>Tension</p><p class='v'>{tens.get('label','—')} ({tens.get('score','—')}/100)</p></div>",
+            f"<div class='metric'><p class='k'>Attractivité du secteur</p><p class='v'>{tens.get('label','—')} ({tens.get('score','—')}/100)</p></div>",
             unsafe_allow_html=True,
         )
 
     st.markdown(
         f"<div class='card soft'>"
         f"<b>Adresse :</b> {geo.get('label','')}<br/>"
-        f"<b>Quartier (proxy) :</b> {hp.get('quartier','—')} — <b>Distance gare :</b> {hp.get('distance_gare_m','—')} m<br/>"
-        f"<b>Base DVF (médiane) :</b> ~{eur(hp.get('pm2_med',0))} / m²<br/>"
-        f"<b>Comparables :</b> {hp.get('n',0)} ventes (12 mois) — rayon max : {hp.get('used_radius','—')} m<br/>"
-        f"<b>DVF dernière mise à jour :</b> {hp.get('last_update','—')}"
+        f"<b>Zone (proxy) :</b> {hp.get('quartier','—')} — <b>Distance gare :</b> {hp.get('distance_gare_m','—')} m<br/>"
+        f"<b>Base ventes réelles :</b> ~{eur(hp.get('pm2_med',0))} / m² (médiane DVF locale)<br/>"
+        f"<b>Biens comparables trouvés :</b> {hp.get('n',0)} ventes (12 mois) — rayon max : {hp.get('used_radius','—')} m"
         f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    # ✅ Disclaimer "l'algo ne fait pas tout"
+    st.markdown(
+        "<div class='card accent-top'>"
+        "<b>Important :</b><br><br>"
+        "Cette estimation est une base <b>très solide</b> (ventes réelles + comparables), mais un algorithme ne peut pas tout savoir "
+        "sans avoir vu le bien.<br><br>"
+        "<b>Ce que cette estimation ne peut pas mesurer correctement sans visite :</b><br>"
+        "– les nuisances (route, voisinage, bruit, vis-à-vis…)<br>"
+        "– la luminosité et l’exposition<br>"
+        "– l’état réel et la qualité des finitions<br>"
+        "– les travaux déjà faits (ou à prévoir) / isolation / DPE<br>"
+        "– l’agencement, les volumes, l’entretien<br>"
+        "– les extérieurs, cave, garage, stationnement, copropriété, charges…<br><br>"
+        "Si vous le souhaitez, <b>Hakim vous recontacte</b> pour affiner cette estimation avec vous et vous donner des conseils adaptés 😉"
+        "</div>",
         unsafe_allow_html=True,
     )
 
@@ -955,7 +989,7 @@ if st.session_state.result_payload and st.session_state.geo:
 
     if hp.get("preview"):
         st.markdown("<div class='card accent-top'>", unsafe_allow_html=True)
-        st.markdown("### 🧾 Exemples de comparables (localisation volontairement vague)")
+        st.markdown("### 🧾 Exemples de biens comparables (localisation volontairement vague)")
         for r in hp["preview"]:
             st.markdown(
                 f"- **{r['type_local']}** · **{r['surface']} m²** · **{eur(r['prix'])}** · "

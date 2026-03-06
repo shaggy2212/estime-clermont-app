@@ -734,7 +734,7 @@ with colR:
     st.markdown(
         "<div class='card soft'>"
         "🔎 <b>Une estimation honnête, pas magique.</b> Les données utilisées viennent des ventes officiellement enregistrées sur votre secteur "
-        "(source : data.gouv.fr, màj octobre 2025). Certaines infos comme le nombre de pièces ne sont pas toujours disponibles dans ces données, "
+        "(source : data.gouv.fr, màj novembre 2025). Certaines infos comme le nombre de pièces ne sont pas toujours disponibles dans ces données, "
         "donc on croise avec ce que vous nous indiquez pour rester au plus juste. Pas de chiffre sorti du chapeau."
         "</div>",
         unsafe_allow_html=True,

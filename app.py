@@ -28,20 +28,21 @@ GARE_LAT = 49.38531
 BOOKING_URL = "https://hakimremax.youcanbook.me/"
 
 AREAS: Dict[str, Dict[str, str]] = {
-    "Clermont-de-l'Oise":    {"city": "Clermont",            "postcode": "60600", "insee": "60157"},
-    "Breuil-le-Vert":        {"city": "Breuil-le-Vert",      "postcode": "60600", "insee": "60107"},
-    "Agnetz":                {"city": "Agnetz",               "postcode": "60600", "insee": "60007"},
-    "Fitz-James":            {"city": "Fitz-James",           "postcode": "60600", "insee": "60234"},
-    "Breuil-le-Sec":         {"city": "Breuil-le-Sec",        "postcode": "60840", "insee": "60106"},
-    "Neuilly-sous-Clermont": {"city": "Neuilly-sous-Clermont","postcode": "60290", "insee": "60451"},
-    "Bailleval":             {"city": "Bailleval",            "postcode": "60140", "insee": "60042"},
+    "Clermont-de-l'Oise":    {"city": "Clermont",             "postcode": "60600", "insee": "60157"},
+    "Breuil-le-Vert":        {"city": "Breuil-le-Vert",       "postcode": "60600", "insee": "60107"},
+    "Agnetz":                {"city": "Agnetz",                "postcode": "60600", "insee": "60007"},
+    "Fitz-James":            {"city": "Fitz-James",            "postcode": "60600", "insee": "60234"},
+    "Breuil-le-Sec":         {"city": "Breuil-le-Sec",         "postcode": "60840", "insee": "60106"},
+    "Neuilly-sous-Clermont": {"city": "Neuilly-sous-Clermont", "postcode": "60290", "insee": "60451"},
+    "Bailleval":             {"city": "Bailleval",             "postcode": "60140", "insee": "60042"},
 }
 
 AUTO_AREA    = "🔎 Détection automatique"
 DEFAULT_AREA = "Clermont-de-l'Oise"
 
-GEOPF_COMPLETION_URL = "https://data.geopf.fr/geocodage/completion/"
-GEOPF_SEARCH_URL     = "https://data.geopf.fr/geocodage/search"
+# ── Géocodage : on utilise l'API BAN (plus rapide et fiable que Géoplateforme IGN)
+BAN_SEARCH_URL     = "https://api-adresse.data.gouv.fr/search/"
+BAN_COMPLETION_URL = "https://api-adresse.data.gouv.fr/search/"
 
 DVF_LOCAL_PATH   = Path("data/dvf_local.parquet")
 DVF_CACHE_BUSTER = "v9"
@@ -76,21 +77,28 @@ st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
 
-/* ── Base ── */
 html, body, [class*="stApp"] {{
     font-family: 'Poppins', sans-serif !important;
     font-size: 16px !important;
 }}
 .main {{ background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%); }}
 
-/* ── Titres ── */
-h2, h3 {{ color: {PRIMARY} !important; font-weight: 750 !important; }}
+/* ── Titres de section (h2) — plus grands ── */
+h2 {{
+    color: {PRIMARY} !important;
+    font-weight: 800 !important;
+    font-size: 1.75rem !important;
+    margin-bottom: 0.8rem !important;
+}}
+h3 {{
+    color: {PRIMARY} !important;
+    font-weight: 700 !important;
+    font-size: 1.25rem !important;
+}}
 
-/* ── Textes ── */
 p, li, span, label {{ font-size: 1rem !important; }}
 .small-note {{ color: #4b5563; font-size: 0.93rem !important; line-height: 1.5; }}
 
-/* ── Badge ── */
 .badge {{
     display: inline-block; padding: 0.35rem 0.85rem; border-radius: 999px;
     background: rgba(0,77,127,0.10); color: {PRIMARY};
@@ -111,6 +119,23 @@ p, li, span, label {{ font-size: 1rem !important; }}
 .card ul {{ margin: 0.5rem 0 0 0; padding-left: 0; list-style: none; }}
 .card ul li {{ padding: 0.32rem 0; font-size: 0.97rem !important; }}
 
+/* ── Disclaimer avec flèches saumon ── */
+.disclaimer-list {{
+    list-style: none; padding-left: 0; margin: 0.6rem 0 1rem 0;
+}}
+.disclaimer-list li {{
+    padding: 0.28rem 0;
+    font-size: 0.97rem !important;
+    display: flex; align-items: flex-start; gap: 0.5rem;
+}}
+.disclaimer-list li::before {{
+    content: "→";
+    color: {ACCENT};
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 0.05rem;
+}}
+
 /* ── Métriques résultats ── */
 .metric {{
     background: linear-gradient(135deg, {ACCENT} 0%, #ff5b66 100%);
@@ -120,72 +145,103 @@ p, li, span, label {{ font-size: 1rem !important; }}
 .metric .k {{ font-size: 0.88rem !important; opacity: 0.95; margin: 0; }}
 .metric .v {{ font-size: 1.55rem !important; font-weight: 850; margin: 0.15rem 0 0 0; letter-spacing: -0.02em; }}
 
-/* ── Séparateur ── */
 hr {{ border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 1.3rem 0; }}
 .form-divider {{ border: none; border-top: 1px solid #e5e7eb; margin: 1.3rem 0 1.1rem 0; }}
 
-/* ── Inputs ── */
+/* ── Inputs redesignés ── */
 [data-testid="stTextInput"] input,
 [data-testid="stNumberInput"] input {{
-    height: 52px !important;
+    height: 50px !important;
     font-size: 1rem !important;
     padding: 0 1rem !important;
-    border-radius: 10px !important;
-    border: 1.5px solid #d1d5db !important;
-    background: #fafafa !important;
-    transition: border-color 0.2s, box-shadow 0.2s !important;
+    line-height: 50px !important;
+    border-radius: 12px !important;
+    border: 2px solid #e5e7eb !important;
+    background: white !important;
+    color: #111827 !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06) !important;
+    transition: border-color 0.18s, box-shadow 0.18s !important;
 }}
 [data-testid="stTextInput"] input:focus,
 [data-testid="stNumberInput"] input:focus {{
     border-color: {PRIMARY} !important;
-    box-shadow: 0 0 0 3px rgba(0,77,127,0.12) !important;
-    background: white !important; outline: none !important;
+    box-shadow: 0 0 0 3px rgba(0,77,127,0.13) !important;
+    outline: none !important;
+}}
+[data-testid="stTextInput"] input::placeholder,
+[data-testid="stNumberInput"] input::placeholder {{
+    color: #9ca3af !important;
+    font-size: 0.93rem !important;
 }}
 
 /* Masque "Press Enter to submit" */
 [data-testid="InputInstructions"] {{ display: none !important; }}
 
-/* ── Selectbox ── */
-[data-testid="stSelectbox"] > div > div {{
-    min-height: 52px !important; border-radius: 10px !important;
+/* ── Selectbox redesigné ── */
+[data-testid="stSelectbox"] > div > div > div {{
+    min-height: 50px !important;
+    border-radius: 12px !important;
     font-size: 1rem !important;
-    border: 1.5px solid #d1d5db !important; background: #fafafa !important;
+    border: 2px solid #e5e7eb !important;
+    background: white !important;
+    color: #111827 !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06) !important;
+    display: flex !important;
+    align-items: center !important;
+    padding: 0 0.9rem !important;
 }}
 
 /* ── Labels widgets ── */
 [data-testid="stTextInput"] label,
 [data-testid="stNumberInput"] label,
 [data-testid="stSelectbox"] label {{
-    font-size: 0.95rem !important; font-weight: 600 !important;
-    color: #374151 !important; margin-bottom: 0.2rem !important;
+    font-size: 0.95rem !important;
+    font-weight: 600 !important;
+    color: #374151 !important;
+    margin-bottom: 0.25rem !important;
 }}
 
 /* ── Checkbox ── */
 [data-testid="stCheckbox"] label p {{ font-size: 0.93rem !important; color: #4b5563 !important; }}
 
-/* ── Bouton CTA ── */
+/* ── Bouton CTA — texte vraiment visible ── */
 .stButton > button {{
     background: linear-gradient(135deg, {ACCENT} 0%, #ff5b66 100%) !important;
-    color: white !important; font-weight: 900 !important;
-    border-radius: 14px !important; border: none !important;
-    padding: 1.1rem 1.4rem !important; font-size: 1.2rem !important;
-    line-height: 1.3 !important;
+    color: white !important;
+    border-radius: 14px !important;
+    border: none !important;
+    padding: 0.95rem 1.4rem !important;
     box-shadow: 0 10px 26px rgba(255,126,121,0.35) !important;
     transition: opacity 0.2s, transform 0.1s !important;
     width: 100%;
+    min-height: 58px !important;
+}}
+/* Cible TOUS les niveaux de wrapping que Streamlit peut créer */
+.stButton > button,
+.stButton > button *,
+.stButton > button span,
+.stButton > button p,
+.stButton > button div {{
+    font-size: 1.18rem !important;
+    font-weight: 900 !important;
+    letter-spacing: 0.01em !important;
+    color: white !important;
+    line-height: 1.3 !important;
 }}
 .stButton > button:hover:not(:disabled) {{
-    opacity: 0.92 !important; transform: translateY(-1px) !important;
+    opacity: 0.92 !important;
+    transform: translateY(-1px) !important;
 }}
-.stButton > button:disabled {{
+.stButton > button:disabled,
+.stButton > button:disabled *,
+.stButton > button:disabled span,
+.stButton > button:disabled p,
+.stButton > button:disabled div {{
     background: linear-gradient(135deg, #d1d5db 0%, #9ca3af 100%) !important;
-    box-shadow: none !important; cursor: not-allowed !important;
-    transform: none !important; opacity: 0.75 !important;
-}}
-.stButton > button > div > p,
-.stButton > button > div {{
-    font-size: 1.2rem !important; font-weight: 900 !important;
-    letter-spacing: 0.01em !important; color: white !important;
+    box-shadow: none !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+    color: white !important;
 }}
 
 /* ── Bouton RDV ── */
@@ -200,27 +256,23 @@ hr {{ border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 1.3rem 0; }}
 }}
 .booking-btn a:hover {{ opacity: 0.88; }}
 
-/* ── Message tension ── */
 .tension-box {{
     border-radius: 12px; padding: 1rem 1.2rem; margin: 0.6rem 0;
     border-left: 4px solid {ACCENT}; background: #fff8f8;
     font-size: 0.97rem !important; line-height: 1.6;
 }}
 
-/* ── Séparateur section formulaire ── */
 .form-section-label {{
     font-size: 0.82rem !important; font-weight: 700 !important;
     text-transform: uppercase; letter-spacing: 0.08em;
     color: #9ca3af; margin-bottom: 0.7rem; display: block;
 }}
 
-/* ── Helper adresse ── */
 .addr-helper {{
     font-size: 0.85rem !important; color: #6b7280;
     margin-top: -0.3rem; margin-bottom: 0.6rem;
 }}
 
-/* ── Statut champs ── */
 .fields-status {{ font-size: 0.87rem !important; color: #6b7280; text-align: center; margin-top: 0.5rem; }}
 .fields-status.ready {{ color: #059669 !important; font-weight: 600 !important; }}
 </style>
@@ -249,8 +301,7 @@ def haversine_m(lat1, lon1, lat2, lon2) -> float:
 
 def get_effective_area() -> Tuple[str, Dict[str, str]]:
     if st.session_state.area_name in AREAS:
-        a = st.session_state.area_name
-        return a, AREAS[a]
+        return st.session_state.area_name, AREAS[st.session_state.area_name]
     detected = st.session_state.get("detected_area")
     if detected in AREAS:
         return detected, AREAS[detected]
@@ -329,70 +380,129 @@ def is_form_ready() -> Tuple[bool, int]:
 # KIT (ConvertKit)
 # ===========================
 def add_to_kit(prenom: str, email: str, area: str, bien_type: str, surface: float) -> bool:
+    """
+    Envoie le contact dans KIT via l'API v3.
+    Prérequis dans .streamlit/secrets.toml (et Streamlit Cloud → Settings → Secrets) :
+        KIT_API_KEY = "ta_cle_api"
+        KIT_FORM_ID = "ton_form_id"
+
+    IMPORTANT : les custom fields 'commune', 'type_bien', 'surface', 'source'
+    doivent être créés manuellement dans KIT → Subscribers → Custom Fields
+    AVANT que l'API puisse les remplir.
+    """
     try:
         api_key = st.secrets.get("KIT_API_KEY", "")
         form_id = st.secrets.get("KIT_FORM_ID", "")
         if not api_key or not form_id:
+            if DEBUG:
+                st.warning("KIT : clé API ou form ID manquants dans les secrets.")
             return False
+
         url = f"https://api.convertkit.com/v3/forms/{form_id}/subscribe"
         payload = {
-            "api_key": api_key, "email": email, "first_name": prenom,
-            "fields": {"commune": area, "type_bien": bien_type, "surface": str(int(surface)), "source": "EstimeClermont"},
-            "tags": ["EstimeClermont"],
+            "api_key": api_key,
+            "email": email,
+            "first_name": prenom,
+            "fields": {
+                "commune":   area,
+                "type_bien": bien_type,
+                "surface":   str(int(surface)),
+                "source":    "EstimeClermont",
+            },
         }
-        r = requests.post(url, json=payload, timeout=8)
-        return r.status_code == 200
-    except Exception:
+        r = requests.post(url, json=payload, timeout=10)
+        if DEBUG:
+            st.write(f"KIT response {r.status_code}:", r.text[:300])
+        return r.status_code in (200, 201)
+    except Exception as e:
+        if DEBUG:
+            st.warning(f"KIT erreur : {e}")
         return False
 
 
 # ===========================
-# Geocodage & DVF
+# Géocodage — API BAN (Base Adresse Nationale)
+# Beaucoup plus rapide que Géoplateforme IGN pour les adresses françaises
 # ===========================
-@st.cache_data(ttl=6*3600, show_spinner=False)
-def geopf_completion(text: str, postcode: str, city: str, max_resp: int = 7) -> List[str]:
+@st.cache_data(ttl=3600, show_spinner=False)
+def ban_completion(text: str, postcode: str, limit: int = 6) -> List[Dict[str, Any]]:
+    """
+    Autocomplétion via l'API BAN.
+    Retourne une liste de dicts {label, lat, lon, city, postcode}.
+    """
     if not text or len(text.strip()) < 2:
         return []
-    params = {"text": text.strip(), "terr": postcode, "type": "StreetAddress",
-              "maximumResponses": max_resp, "city": city}
-    r = requests.get(GEOPF_COMPLETION_URL, params=params, timeout=8)
-    r.raise_for_status()
-    results = r.json().get("results") or r.json().get("features") or []
-    out: List[str] = []
-    for it in results:
-        props = it.get("properties", it) if isinstance(it, dict) else {}
-        label = props.get("label") or props.get("fulltext") or props.get("name")
-        if not label: continue
-        if postcode and postcode not in label: continue
-        if city and norm(city) not in norm(label): continue
-        out.append(label)
-    seen, dedup = set(), []
-    for lab in out:
-        if lab not in seen:
-            dedup.append(lab); seen.add(lab)
-    return dedup
+    try:
+        params = {
+            "q":          text.strip(),
+            "postcode":   postcode,
+            "limit":      limit,
+            "autocomplete": 1,
+        }
+        r = requests.get(BAN_COMPLETION_URL, params=params, timeout=5)
+        r.raise_for_status()
+        feats = r.json().get("features", [])
+        results = []
+        for f in feats:
+            props  = f.get("properties", {})
+            coords = f.get("geometry", {}).get("coordinates", [])
+            if len(coords) < 2:
+                continue
+            results.append({
+                "label":    props.get("label", ""),
+                "lat":      float(coords[1]),
+                "lon":      float(coords[0]),
+                "city":     props.get("city", ""),
+                "postcode": props.get("postcode", ""),
+            })
+        return results
+    except Exception:
+        return []
 
-@st.cache_data(ttl=24*3600, show_spinner=False)
-def geopf_geocode_one(query: str) -> Optional[Dict[str, Any]]:
-    if not query: return None
-    params = {"q": query, "limit": 1}
-    r = requests.get(GEOPF_SEARCH_URL, params=params, timeout=10)
-    r.raise_for_status()
-    feats = r.json().get("features", [])
-    if not feats: return None
-    f0     = feats[0]
-    coords = f0.get("geometry", {}).get("coordinates")
-    if not coords or len(coords) < 2: return None
-    return {"lat": float(coords[1]), "lon": float(coords[0]),
-            "label": f0.get("properties", {}).get("label") or query}
+@st.cache_data(ttl=86400, show_spinner=False)
+def ban_geocode(query: str, postcode: str) -> Optional[Dict[str, Any]]:
+    """Géocode une adresse complète via BAN."""
+    if not query:
+        return None
+    try:
+        params = {"q": query, "postcode": postcode, "limit": 1}
+        r = requests.get(BAN_SEARCH_URL, params=params, timeout=8)
+        r.raise_for_status()
+        feats = r.json().get("features", [])
+        if not feats:
+            return None
+        f0     = feats[0]
+        props  = f0.get("properties", {})
+        coords = f0.get("geometry", {}).get("coordinates", [])
+        if len(coords) < 2:
+            return None
+        return {
+            "lat":      float(coords[1]),
+            "lon":      float(coords[0]),
+            "label":    props.get("label", query),
+            "postcode": props.get("postcode", postcode),
+            "city":     props.get("city", ""),
+        }
+    except Exception:
+        return None
 
+
+# ===========================
+# DVF
+# ===========================
 @st.cache_data(ttl=6*3600, show_spinner=False)
 def load_dvf_local(_bust: str = DVF_CACHE_BUSTER) -> pd.DataFrame:
-    if not DVF_LOCAL_PATH.exists(): return pd.DataFrame()
+    if not DVF_LOCAL_PATH.exists():
+        return pd.DataFrame()
     df = pd.read_parquet(DVF_LOCAL_PATH)
-    for col, fn in [("date_mutation", pd.to_datetime), ("valeur_fonciere", pd.to_numeric),
-                    ("surface_reelle_bati", pd.to_numeric), ("longitude", pd.to_numeric), ("latitude", pd.to_numeric)]:
-        df[col] = fn(df.get(col), errors="coerce")
+    for col, fn in [
+        ("date_mutation",       lambda x: pd.to_datetime(x, errors="coerce")),
+        ("valeur_fonciere",     lambda x: pd.to_numeric(x, errors="coerce")),
+        ("surface_reelle_bati", lambda x: pd.to_numeric(x, errors="coerce")),
+        ("longitude",           lambda x: pd.to_numeric(x, errors="coerce")),
+        ("latitude",            lambda x: pd.to_numeric(x, errors="coerce")),
+    ]:
+        df[col] = fn(df.get(col))
     df["type_local_raw"] = df.get("type_local")
     df["type_local"]     = df["type_local_raw"].apply(normalize_type_local)
     df = df.dropna(subset=["date_mutation","valeur_fonciere","surface_reelle_bati","longitude","latitude","type_local"])
@@ -401,34 +511,41 @@ def load_dvf_local(_bust: str = DVF_CACHE_BUSTER) -> pd.DataFrame:
     return df
 
 def dvf_select_similaires_strict(df_all, lat, lon, bien_type, surface) -> Tuple[pd.DataFrame, int, float]:
-    if df_all.empty: return pd.DataFrame(), 0, 0.0
+    if df_all.empty:
+        return pd.DataFrame(), 0, 0.0
     target_type = normalize_type_local(bien_type)
     surface     = float(surface)
     max_date    = df_all["date_mutation"].max()
-    if pd.isna(max_date): return pd.DataFrame(), 0, 0.0
+    if pd.isna(max_date):
+        return pd.DataFrame(), 0, 0.0
     df = df_all[df_all["date_mutation"] >= max_date - pd.Timedelta(days=365)].copy()
-    if df.empty: return pd.DataFrame(), 0, 0.0
+    if df.empty:
+        return pd.DataFrame(), 0, 0.0
     df["type_local"] = df["type_local"].apply(normalize_type_local)
     df = df[df["type_local"] == target_type].copy()
-    if df.empty: return pd.DataFrame(), 0, 0.0
+    if df.empty:
+        return pd.DataFrame(), 0, 0.0
     lat0, lon0 = float(lat), float(lon)
     R    = 6371000.0
-    phi1 = np.radians(lat0); phi2 = np.radians(df["latitude"].to_numpy(float))
-    dphi = np.radians(df["latitude"].to_numpy(float) - lat0)
+    phi1 = np.radians(lat0)
+    phi2 = np.radians(df["latitude"].to_numpy(float))
+    dphi = np.radians(df["latitude"].to_numpy(float)  - lat0)
     dl   = np.radians(df["longitude"].to_numpy(float) - lon0)
     a    = np.sin(dphi/2)**2 + np.cos(phi1)*np.cos(phi2)*np.sin(dl/2)**2
-    df["distance_m"] = 2 * R * np.arctan2(np.sqrt(a), np.sqrt(1-a))
+    df["distance_m"] = 2 * R * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
     radii      = [600, 900, 1500, 2500, 3500]
-    tolerances = [0.20,0.25,0.30,0.35] if target_type=="Appartement" else [0.25,0.30,0.40,0.45]
+    tolerances = [0.20, 0.25, 0.30, 0.35] if target_type == "Appartement" else [0.25, 0.30, 0.40, 0.45]
     min_needed = 4
     best = pd.DataFrame(); used_radius = 0; used_tol = 0.0
     for rad in radii:
         df_r = df[df["distance_m"] <= rad].copy()
-        if df_r.empty: continue
+        if df_r.empty:
+            continue
         for tol in tolerances:
             lo, hi = surface*(1-tol), surface*(1+tol)
             df_s = df_r[(df_r["surface_reelle_bati"]>=lo)&(df_r["surface_reelle_bati"]<=hi)].copy()
-            if df_s.empty: continue
+            if df_s.empty:
+                continue
             df_s["prix_m2"] = df_s["valeur_fonciere"] / df_s["surface_reelle_bati"]
             df_s = df_s.replace([np.inf,-np.inf], np.nan).dropna(subset=["prix_m2"])
             if len(df_s) >= 10:
@@ -436,11 +553,13 @@ def dvf_select_similaires_strict(df_all, lat, lon, bien_type, surface) -> Tuple[
                 df_s = df_s[(df_s["prix_m2"]>=q10)&(df_s["prix_m2"]<=q90)]
             if len(df_s) >= min_needed:
                 best = df_s; used_radius = rad; used_tol = tol; break
-        if not best.empty: break
+        if not best.empty:
+            break
     if best.empty:
         tol = tolerances[-1]; rad = radii[-1]; lo, hi = surface*(1-tol), surface*(1+tol)
         df_fb = df[(df["distance_m"]<=rad)&(df["surface_reelle_bati"]>=lo)&(df["surface_reelle_bati"]<=hi)].copy()
-        if df_fb.empty: return pd.DataFrame(), 0, 0.0
+        if df_fb.empty:
+            return pd.DataFrame(), 0, 0.0
         df_fb["prix_m2"] = df_fb["valeur_fonciere"] / df_fb["surface_reelle_bati"]
         df_fb = df_fb.replace([np.inf,-np.inf], np.nan).dropna(subset=["prix_m2"])
         return df_fb.sort_values(["distance_m","date_mutation"], ascending=[True,False]).head(3), rad, tol
@@ -456,10 +575,10 @@ def reliability_label(n: int) -> str:
 def market_tension_index(df_local: pd.DataFrame, used_radius: int) -> Dict[str, Any]:
     if df_local is None or df_local.empty or used_radius <= 0:
         return {"score": 0, "label": "🔴 Inconnu", "detail": "Pas assez de données"}
-    n         = int(len(df_local))
-    area_km2  = np.pi * (used_radius/1000.0)**2
-    density   = n / max(1e-6, area_km2)
-    last_date = pd.to_datetime(df_local["date_mutation"]).max()
+    n          = int(len(df_local))
+    area_km2   = np.pi * (used_radius/1000.0)**2
+    density    = n / max(1e-6, area_km2)
+    last_date  = pd.to_datetime(df_local["date_mutation"]).max()
     days_since = int(max(0,(pd.Timestamp.utcnow().tz_localize(None)-pd.to_datetime(last_date).tz_localize(None)).days))
     pm2 = pd.to_numeric(df_local.get("prix_m2"), errors="coerce").replace([np.inf,-np.inf], np.nan).dropna()
     iqr_ratio = 1.0
@@ -469,7 +588,8 @@ def market_tension_index(df_local: pd.DataFrame, used_radius: int) -> Dict[str, 
         0.45*100*(1-np.exp(-density/18)) + 0.35*100*np.exp(-days_since/95) + 0.20*100*np.exp(-iqr_ratio/0.18),
         0, 100
     ))
-    label = "🔥 Très attractif" if score>=75 else "⚡ Attractif" if score>=55 else "🙂 Équilibré" if score>=35 else "🧊 Plus calme"
+    label = ("🔥 Très attractif" if score>=75 else "⚡ Attractif" if score>=55
+             else "🙂 Équilibré" if score>=35 else "🧊 Plus calme")
     return {"score": int(round(score)), "label": label,
             "detail": f"Densité ~{density:.1f}/km² · Dernière vente {days_since}j · IQR ~{iqr_ratio:.2f}"}
 
@@ -496,7 +616,10 @@ def compute_micro_market_estimate(df_all, lat, lon, bien_type, surface, nb_piece
         df_local["type_local"] = df_local["type_local"].apply(normalize_type_local)
         df_local = df_local[df_local["type_local"]==target_type].copy()
         tol = float(used_tol or (0.35 if target_type=="Appartement" else 0.45))
-        df_local = df_local[(df_local["surface_reelle_bati"]>=surface*(1-tol))&(df_local["surface_reelle_bati"]<=surface*(1+tol))].copy()
+        df_local = df_local[
+            (df_local["surface_reelle_bati"]>=surface*(1-tol)) &
+            (df_local["surface_reelle_bati"]<=surface*(1+tol))
+        ].copy()
         df_local["prix_m2"] = df_local["valeur_fonciere"] / df_local["surface_reelle_bati"]
         df_local = df_local.replace([np.inf,-np.inf], np.nan).dropna(subset=["prix_m2"])
         df_local = df_local.drop_duplicates(
@@ -506,9 +629,13 @@ def compute_micro_market_estimate(df_all, lat, lon, bien_type, surface, nb_piece
     if n >= 2:   pm2_med = float(df_local["prix_m2"].median())
     elif n == 1: pm2_med = float(df_local["prix_m2"].iloc[0])
     else:
-        pm2_med = float({"Centre-ville":{"Maison":2100,"Appartement":2500},"Nord (Gare)":{"Maison":1950,"Appartement":2200},
-            "Sud (Résidentiel)":{"Maison":2350,"Appartement":2700},"Est (Pavillons)":{"Maison":2000,"Appartement":2300},
-            "Ouest (Neuf)":{"Maison":2450,"Appartement":2800}}[quartier][target_type])
+        pm2_med = float({
+            "Centre-ville":      {"Maison":2100,"Appartement":2500},
+            "Nord (Gare)":       {"Maison":1950,"Appartement":2200},
+            "Sud (Résidentiel)": {"Maison":2350,"Appartement":2700},
+            "Est (Pavillons)":   {"Maison":2000,"Appartement":2300},
+            "Ouest (Neuf)":      {"Maison":2450,"Appartement":2800},
+        }[quartier][target_type])
     adj        = compute_adjustments(target_type, surface, nb_pieces, nb_chambres, etat, distance_m)
     adj_factor = adj["etat"]*adj["pieces"]*adj["chambres"]*adj["gare"]*adj["scale"]
     tension    = market_tension_index(df_local, used_radius if used_radius else 0)
@@ -520,27 +647,49 @@ def compute_micro_market_estimate(df_all, lat, lon, bien_type, surface, nb_piece
     est_min, est_max = float(center-full_width/2), float(center+full_width/2)
     if not np.isfinite(est_min) or not np.isfinite(est_max):
         est_min, est_max = center*0.93, center*1.07
-    if est_min > est_max: est_min, est_max = est_max, est_min
+    if est_min > est_max:
+        est_min, est_max = est_max, est_min
     max_date    = df_all["date_mutation"].max()
     last_update = max_date.strftime("%B %Y") if pd.notna(max_date) else "—"
-    preview, map_points = [], []
+
+    # ── Preview + carte : on prend exactement les mêmes lignes, même nombre ──
+    preview    = []
+    map_points = []
     if not df_local.empty:
-        for _, r in df_local.sort_values(["distance_m","date_mutation"], ascending=[True,False]).head(6).iterrows():
-            try: mois = pd.to_datetime(r["date_mutation"]).strftime("%m/%Y")
-            except: mois = "—"
-            preview.append({"type_local":str(r.get("type_local","")),
-                "surface":int(round(float(r.get("surface_reelle_bati",0)))),
-                "prix":float(r.get("valeur_fonciere",0)), "mois":mois,
-                "commune":str(r.get("nom_commune","Secteur")),
-                "dist":int(round(float(r.get("distance_m",0))/100)*100)})
+        # On trie et on limite à 6 biens MAX — même slice pour preview et carte
+        df_preview = df_local.sort_values(
+            ["distance_m","date_mutation"], ascending=[True,False]
+        ).head(6).copy()
+
+        for _, r in df_preview.iterrows():
+            try:
+                mois = pd.to_datetime(r["date_mutation"]).strftime("%m/%Y")
+            except Exception:
+                mois = "—"
+            preview.append({
+                "type_local": str(r.get("type_local","")),
+                "surface":    int(round(float(r.get("surface_reelle_bati",0)))),
+                "prix":       float(r.get("valeur_fonciere",0)),
+                "mois":       mois,
+                "commune":    str(r.get("nom_commune","Secteur")),
+                "dist":       int(round(float(r.get("distance_m",0)) / 100) * 100),
+            })
+            # Jitter ~30m max pour flouter légèrement sans dénaturer la carte
             rng = np.random.default_rng(seed=int(r.get("valeur_fonciere",0)) % 9999)
-            map_points.append({"lat":float(r["latitude"])+rng.uniform(-0.0005,0.0005),
-                               "lon":float(r["longitude"])+rng.uniform(-0.0005,0.0005)})
-    return {"bien_type":target_type,"surface":float(surface),"quartier":quartier,
-        "distance_gare_m":int(round(distance_m)),"pm2_med":float(pm2_med),"adj":adj,
-        "adj_factor":float(adj_factor),"tilt":float(tilt),"est_min":est_min,"est_max":est_max,
-        "n":n,"used_radius":int(used_radius or 0),"used_tol":float(used_tol or 0),
-        "reliability":rel,"tension":tension,"last_update":last_update,"preview":preview,"map_points":map_points}
+            map_points.append({
+                "lat": float(r["latitude"])  + rng.uniform(-0.00025, 0.00025),
+                "lon": float(r["longitude"]) + rng.uniform(-0.00025, 0.00025),
+            })
+
+    return {
+        "bien_type": target_type, "surface": float(surface), "quartier": quartier,
+        "distance_gare_m": int(round(distance_m)), "pm2_med": float(pm2_med),
+        "adj": adj, "adj_factor": float(adj_factor), "tilt": float(tilt),
+        "est_min": est_min, "est_max": est_max, "n": n,
+        "used_radius": int(used_radius or 0), "used_tol": float(used_tol or 0),
+        "reliability": rel, "tension": tension, "last_update": last_update,
+        "preview": preview, "map_points": map_points,
+    }
 
 
 # ===========================
@@ -559,8 +708,7 @@ if DEBUG:
 
 
 # ===========================
-# Layout : Info GAUCHE / desktop  →  HAUT / mobile
-#          Formulaire DROITE / desktop  →  BAS / mobile
+# Layout principal
 # ===========================
 colInfo, colForm = st.columns([0.90, 1.25], gap="large")
 
@@ -606,35 +754,38 @@ with colForm:
 
     effective_area, ai = get_effective_area()
 
-    # Adresse (hors form — callbacks autorisés)
+    # ── Adresse (BAN — rapide) ────────────────────────────────────────
     st.text_input(
         "Adresse du bien",
-        placeholder="Ex : 5 Rue du Chemin Blanc",
+        placeholder="Ex : 5 Rue de la République",
         key="addr_typed",
     )
     st.markdown(
-        "<div class='addr-helper'>💡 Les suggestions apparaissent automatiquement dès que vous tapez — pas besoin d'appuyer sur Entrée.</div>",
+        "<div class='addr-helper'>💡 Les suggestions apparaissent automatiquement — pas besoin d'appuyer sur Entrée.</div>",
         unsafe_allow_html=True,
     )
 
     typed = (st.session_state.addr_typed or "").strip()
     suggestions_display: List[str] = []
+    suggestion_geo_map: Dict[str, Dict] = {}   # label affiché → données geo
 
     if len(typed) >= 2:
         if st.session_state.area_name == AUTO_AREA:
+            # On cherche dans toutes les communes du secteur
             for area_name, info in AREAS.items():
-                try:
-                    labs = geopf_completion(typed, postcode=info["postcode"], city=info["city"], max_resp=4)
-                except Exception:
-                    labs = []
-                for lab in labs:
-                    suggestions_display.append(f"{area_name} — {lab}")
+                results = ban_completion(typed, postcode=info["postcode"], limit=3)
+                for res in results:
+                    display = f"{area_name} — {res['label']}"
+                    suggestions_display.append(display)
+                    suggestion_geo_map[display] = res
         else:
-            try:
-                labs = geopf_completion(typed, postcode=ai["postcode"], city=ai["city"], max_resp=8)
-            except Exception:
-                labs = []
-            suggestions_display = labs[:]
+            results = ban_completion(typed, postcode=ai["postcode"], limit=7)
+            for res in results:
+                suggestions_display.append(res["label"])
+                suggestion_geo_map[res["label"]] = res
+
+    # Stocker la map geo en session pour récupération au submit
+    st.session_state["_suggestion_geo_map"] = suggestion_geo_map
 
     if suggestions_display:
         prev_display  = st.session_state.get("addr_choice_display", "")
@@ -647,7 +798,7 @@ with colForm:
             on_change=on_addr_choice_display_change,
         )
     elif len(typed) >= 2:
-        st.caption("⏳ Recherche en cours…")
+        st.caption("Aucune adresse trouvée — vérifiez l'orthographe ou précisez le numéro.")
         st.session_state.addr_choice_display = ""
         st.session_state.addr_choice         = ""
     else:
@@ -694,7 +845,7 @@ with colForm:
 
     st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
 
-    # Bouton — grisé si formulaire incomplet
+    # Bouton CTA
     ready, filled_count = is_form_ready()
     submitted = st.button(
         "✨ Voir l'estimation de mon bien →",
@@ -714,31 +865,52 @@ with colForm:
             unsafe_allow_html=True,
         )
 
-    # Traitement
+    # ── Traitement soumission ────────────────────────────────────────
     if submitted:
         effective_area, ai = get_effective_area()
-        detected_area, detected_label = parse_display_choice(st.session_state.get("addr_choice_display", ""))
-        addr_label = detected_label if detected_label else (st.session_state.addr_choice or typed)
 
-        if st.session_state.area_name == AUTO_AREA and detected_area:
-            st.session_state.detected_area = detected_area
-            st.session_state.area_locked   = True
-            effective_area, ai = get_effective_area()
+        # Récupérer les coordonnées directement depuis la suggestion (pas de géocodage supplémentaire)
+        geo_map   = st.session_state.get("_suggestion_geo_map", {})
+        chosen    = st.session_state.get("addr_choice_display", "")
+        geo_data  = geo_map.get(chosen)
 
-        q = normalize_query_to_area(addr_label, city=ai["city"], postcode=ai["postcode"])
-        try:
-            geo = geopf_geocode_one(q)
-        except Exception:
-            geo = None
+        # Fallback : géocoder si les données ne sont plus en session
+        if not geo_data:
+            detected_area, detected_label = parse_display_choice(chosen)
+            addr_label = detected_label if detected_label else chosen
+            q = normalize_query_to_area(addr_label, city=ai["city"], postcode=ai["postcode"])
+            geo_data = ban_geocode(q, postcode=ai["postcode"])
 
-        if not geo:
-            st.error("Impossible de localiser cette adresse. Sélectionnez une suggestion précise (numéro + rue) et réessayez.")
+        if not geo_data:
+            st.error("Impossible de localiser cette adresse. Sélectionnez une suggestion dans la liste et réessayez.")
             st.stop()
 
-        label_low = norm(geo.get("label") or "")
-        if ai["postcode"] not in label_low or norm(ai["city"]) not in label_low:
-            st.error("Cette adresse ne correspond pas à la commune sélectionnée. Choisissez une suggestion de la bonne zone.")
+        # Vérifier que l'adresse est bien dans le secteur
+        addr_postcode = geo_data.get("postcode", "")
+        valid_postcodes = {info["postcode"] for info in AREAS.values()}
+        if addr_postcode and addr_postcode not in valid_postcodes:
+            st.error("Cette adresse ne semble pas être dans le secteur couvert. Choisissez une suggestion de la bonne zone.")
             st.stop()
+
+        # Si AUTO_AREA, détecter la commune depuis le code postal
+        if st.session_state.area_name == AUTO_AREA:
+            detected_area, _ = parse_display_choice(chosen)
+            if not detected_area:
+                # Déduction depuis le code postal retourné par BAN
+                for aname, ainfo in AREAS.items():
+                    if ainfo["postcode"] == addr_postcode:
+                        detected_area = aname
+                        break
+            if detected_area:
+                st.session_state.detected_area = detected_area
+                st.session_state.area_locked   = True
+                effective_area, ai = get_effective_area()
+
+        geo = {
+            "lat":   geo_data["lat"],
+            "lon":   geo_data["lon"],
+            "label": geo_data.get("label", chosen),
+        }
 
         t0       = time.time()
         progress = st.progress(0, text="🔎 Analyse des ventes récentes autour de votre bien…")
@@ -751,23 +923,28 @@ with colForm:
             df_all = load_dvf_local(st.session_state.get("_dvf_bust_manual", DVF_CACHE_BUSTER))
             if df_all.empty:
                 st.warning("⚠️ Base DVF locale introuvable.")
-                st.markdown("<a href='mailto:hakim@immoclermontoise.fr'>Contactez Hakim directement →</a>", unsafe_allow_html=True)
+                st.markdown("<a href='mailto:hakim@immoclermontoise.fr'>Contactez Hakim directement →</a>",
+                            unsafe_allow_html=True)
                 st.stop()
 
             step(40, "🏡 Recherche de biens similaires dans votre secteur…", 1.1)
             step(65, "📐 Calcul des ajustements (état, surface, localisation)…", 1.0)
 
             payload = compute_micro_market_estimate(
-                df_all=df_all, lat=float(geo["lat"]), lon=float(geo["lon"]),
-                bien_type=str(st.session_state.bien_type), surface=float(st.session_state.surface),
-                nb_pieces=int(st.session_state.nb_pieces), nb_chambres=int(st.session_state.nb_chambres),
+                df_all=df_all,
+                lat=float(geo["lat"]), lon=float(geo["lon"]),
+                bien_type=str(st.session_state.bien_type),
+                surface=float(st.session_state.surface),
+                nb_pieces=int(st.session_state.nb_pieces),
+                nb_chambres=int(st.session_state.nb_chambres),
                 etat=str(st.session_state.etat),
             )
 
             step(82, "📊 Calcul de la fourchette et de l'attractivité du secteur…", 1.0)
 
             dt = time.time() - t0
-            if dt < MIN_PROGRESS_SECONDS: time.sleep(MIN_PROGRESS_SECONDS - dt)
+            if dt < MIN_PROGRESS_SECONDS:
+                time.sleep(MIN_PROGRESS_SECONDS - dt)
 
             progress.progress(100, text="✅ Votre estimation est prête !")
             time.sleep(0.3)
@@ -775,11 +952,16 @@ with colForm:
             st.session_state.geo            = geo
             st.session_state.result_payload = payload
 
-            add_to_kit(
-                prenom=st.session_state.prenom, email=st.session_state.email,
-                area=effective_area, bien_type=str(st.session_state.bien_type),
+            # Envoi KIT
+            kit_ok = add_to_kit(
+                prenom=st.session_state.prenom,
+                email=st.session_state.email,
+                area=effective_area,
+                bien_type=str(st.session_state.bien_type),
                 surface=float(st.session_state.surface),
             )
+            if DEBUG:
+                st.write("KIT envoi :", "✅ OK" if kit_ok else "❌ Échec")
 
         finally:
             progress.empty()
@@ -802,24 +984,30 @@ if st.session_state.result_payload and st.session_state.geo:
 
     m1, m2, m3 = st.columns(3, gap="medium")
     with m1:
-        st.markdown(f"<div class='metric'><p class='k'>Fourchette estimée</p><p class='v'>{eur(hp['est_min'])} – {eur(hp['est_max'])}</p></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric'><p class='k'>Fourchette estimée</p>"
+                    f"<p class='v'>{eur(hp['est_min'])} – {eur(hp['est_max'])}</p></div>", unsafe_allow_html=True)
     with m2:
-        st.markdown(f"<div class='metric'><p class='k'>Fiabilité des données</p><p class='v'>{hp['reliability']}</p></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric'><p class='k'>Fiabilité des données</p>"
+                    f"<p class='v'>{hp['reliability']}</p></div>", unsafe_allow_html=True)
     with m3:
-        st.markdown(f"<div class='metric'><p class='k'>Attractivité du secteur</p><p class='v'>{tens.get('label','—')} ({tscore}/100)</p></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric'><p class='k'>Attractivité du secteur</p>"
+                    f"<p class='v'>{tens.get('label','—')} ({tscore}/100)</p></div>", unsafe_allow_html=True)
 
     st.markdown(
         f"<div class='card soft'>"
         f"<b>Adresse analysée :</b> {geo.get('label','')}<br/>"
-        f"<b>Zone (proxy) :</b> {hp.get('quartier','—')} — <b>Distance gare :</b> {hp.get('distance_gare_m','—')} m<br/>"
+        f"<b>Zone (proxy) :</b> {hp.get('quartier','—')} — "
+        f"<b>Distance gare :</b> {hp.get('distance_gare_m','—')} m<br/>"
         f"<b>Prix médian au m² (ventes réelles) :</b> ~{eur(hp.get('pm2_med',0))} / m²<br/>"
-        f"<b>Biens comparables trouvés :</b> {hp.get('n',0)} ventes (12 mois glissants) — rayon max : {hp.get('used_radius','—')} m"
+        f"<b>Biens comparables trouvés :</b> {hp.get('n',0)} ventes (12 mois glissants) "
+        f"— rayon max : {hp.get('used_radius','—')} m"
         f"</div>",
         unsafe_allow_html=True,
     )
 
     st.markdown(f"<div class='tension-box'>{tension_context_message(tscore)}</div>", unsafe_allow_html=True)
 
+    # Carte — même nombre de points que dans preview
     map_points = hp.get("map_points", [])
     if map_points:
         st.markdown("### 🗺️ Localisation des ventes comparables")
@@ -827,15 +1015,18 @@ if st.session_state.result_payload and st.session_state.geo:
         bien_point = pd.DataFrame([{"lat": float(geo["lat"]), "lon": float(geo["lon"])}])
         st.map(pd.concat([bien_point, pd.DataFrame(map_points)], ignore_index=True), zoom=14)
 
+    # Disclaimer avec flèches saumon
     st.markdown(
         "<div class='card accent-top'>"
-        "<b>Important — ce que cette estimation ne peut pas mesurer sans visite :</b><br><br>"
-        "– Les nuisances (route, voisinage, bruit, vis-à-vis…)<br>"
-        "– La luminosité et l'exposition<br>"
-        "– L'état réel et la qualité des finitions<br>"
-        "– Les travaux faits ou à prévoir, isolation, DPE<br>"
-        "– L'agencement, les volumes, l'entretien<br>"
-        "– Les extérieurs, cave, garage, stationnement, charges de copropriété…<br><br>"
+        "<b>Ce que les données ne peuvent pas voir à votre place :</b>"
+        "<ul class='disclaimer-list'>"
+        "<li>Les nuisances (route, voisinage, bruit, vis-à-vis…)</li>"
+        "<li>La luminosité et l'exposition</li>"
+        "<li>L'état réel et la qualité des finitions</li>"
+        "<li>Les travaux faits ou à prévoir, isolation, DPE</li>"
+        "<li>L'agencement, les volumes, l'entretien</li>"
+        "<li>Les extérieurs, cave, garage, stationnement, charges de copropriété…</li>"
+        "</ul>"
         "Cette fourchette est une <b>base solide et honnête</b>. Mais pour un chiffre vraiment précis "
         "et des conseils adaptés à votre projet, rien ne vaut un échange de vive voix."
         "</div>",

@@ -380,13 +380,13 @@ p, li, span, label, div {{ color: #334155 !important; }}
 /* ═══ CTA BUTTON ═════════════════════════════════════════════════════ */
 .stButton > button {{
     width: 100% !important;
-    min-height: 62px !important;
+    min-height: 72px !important;
     background: {ACCENT} !important;
     color: white !important;
     border: none !important;
     border-radius: 18px !important;
     font-family: 'Poppins', sans-serif !important;
-    font-size: 1.08rem !important;
+    font-size: 1.35rem !important;
     font-weight: 900 !important;
     letter-spacing: 0.02em !important;
     box-shadow: 0 8px 28px rgba(255,126,121,0.35) !important;
@@ -396,7 +396,7 @@ p, li, span, label, div {{ color: #334155 !important; }}
 .stButton > button span,
 .stButton > button p,
 .stButton > button div {{
-    font-size: 1.08rem !important;
+    font-size: 1.35rem !important;
     font-weight: 900 !important;
     color: white !important;
 }}

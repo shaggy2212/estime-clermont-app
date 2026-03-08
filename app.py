@@ -220,28 +220,29 @@ p, li, span, label, div {{ color: #334155 !important; }}
 }}
 
 /* ═══ NUMBER INPUT ═══════════════════════════════════════════════════ */
-[data-testid="stNumberInput"] {{
+[data-testid="stNumberInput"] > div {{
     background: #f8fafc !important;
     border: 2px solid #e2e8f0 !important;
     border-radius: 16px !important;
-    padding: 0.2rem 0.3rem !important;
+    padding: 0.1rem 0.3rem !important;
 }}
 [data-testid="stNumberInput"] input {{
-    height: 54px !important;
+    height: 50px !important;
     background: transparent !important;
     border: none !important;
     border-radius: 16px !important;
     color: #1e293b !important;
     font-family: 'Poppins', sans-serif !important;
-    font-size: 1.1rem !important;
-    font-weight: 800 !important;
+    font-size: 1.05rem !important;
+    font-weight: 700 !important;
     padding: 0 0.8rem !important;
     text-align: center !important;
-    transition: border-color 0.2s, background 0.2s !important;
+    transition: background 0.2s !important;
     caret-color: {ACCENT} !important;
+    box-shadow: none !important;
 }}
 [data-testid="stNumberInput"] input:focus {{
-    background: white !important;
+    background: transparent !important;
     outline: none !important;
     box-shadow: none !important;
 }}
@@ -262,7 +263,8 @@ p, li, span, label, div {{ color: #334155 !important; }}
 }}
 
 /* ═══ SELECTBOX ══════════════════════════════════════════════════════ */
-[data-testid="stSelectbox"] > div > div {{
+[data-testid="stSelectbox"] > div > div,
+[data-testid="stSelectbox"] > div > div > div {{
     background: #f8fafc !important;
     border: 2px solid #e2e8f0 !important;
     border-radius: 16px !important;
@@ -272,10 +274,22 @@ p, li, span, label, div {{ color: #334155 !important; }}
     font-size: 0.97rem !important;
     font-weight: 600 !important;
 }}
+[data-testid="stSelectbox"] > div > div > div {{
+    border: none !important;
+    min-height: unset !important;
+}}
 [data-testid="stSelectbox"] > div > div:focus-within {{
     background: white !important;
     border-color: {ACCENT} !important;
     box-shadow: 0 0 0 4px rgba(255,126,121,0.12) !important;
+}}
+/* Texte sélectionné aligné */
+[data-testid="stSelectbox"] span {{
+    color: #1e293b !important;
+    font-family: 'Poppins', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 0.97rem !important;
+    line-height: 1.4 !important;
 }}
 [data-testid="stSelectbox"] svg {{ fill: #94a3b8 !important; }}
 

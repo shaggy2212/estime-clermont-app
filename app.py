@@ -324,6 +324,11 @@ p, li, span, label, div {{ color: #334155 !important; }}
 
 [data-testid="InputInstructions"] {{ display: none !important; }}
 
+/* Cache le dropdown d'autocomplétion des number inputs uniquement */
+[data-testid="stNumberInput"] ul {{ display: none !important; }}
+[data-testid="stNumberInput"] [role="listbox"] {{ display: none !important; }}
+[data-testid="stNumberInput"] input[type=number]::-webkit-calendar-picker-indicator {{ display: none !important; }}
+
 /* ═══ ANTI-CLIP — empêche Streamlit de couper les champs ═════════════ */
 [data-testid="stTextInput"],
 [data-testid="stSelectbox"],
@@ -1083,7 +1088,7 @@ with colForm:
         "Pas de spam, pas de relance tous les matins. Promis 🙂",
         key="consent",
     )
-    # MutationObserver ciblé : efface uniquement le background inline du label BaseWeb
+    # MutationObserver ciblé : efface le background inline du label BaseWeb + autocomplete off sur number inputs
     st.components.v1.html("""
     <script>
     (function() {
@@ -1097,6 +1102,13 @@ with colForm:
                 }
             });
         }
+        function fixNumberInputs() {
+            var root = window.parent.document;
+            root.querySelectorAll('[data-testid="stNumberInput"] input').forEach(function(inp) {
+                inp.setAttribute('autocomplete', 'off');
+                inp.setAttribute('list', 'autocompleteOff');
+            });
+        }
         function attachObservers() {
             var root = window.parent.document;
             var checkboxes = root.querySelectorAll('[data-baseweb="checkbox"]');
@@ -1107,6 +1119,7 @@ with colForm:
                     attributes: true, subtree: true, attributeFilter: ['style']
                 });
             });
+            fixNumberInputs();
         }
         attachObservers();
     })();

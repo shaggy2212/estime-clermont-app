@@ -1412,7 +1412,7 @@ if st.session_state.result_payload and st.session_state.geo:
             layers=[layer_comp, layer_bien],
             initial_view_state=view,
             views=[pdk.View(type="MapView", controller={"scrollZoom": False})],
-            map_style="mapbox://styles/mapbox/light-v10",
+            map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
             tooltip=False),
             use_container_width=True)
 

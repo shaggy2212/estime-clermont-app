@@ -209,6 +209,10 @@ p, li, span, label, div {{ color: #334155 !important; }}
 }}
 
 /* ═══ INPUT TEXT ═════════════════════════════════════════════════════ */
+[data-testid="stTextInput"] > div {{
+    border-radius: 16px !important;
+    overflow: visible !important;
+}}
 [data-testid="stTextInput"] input {{
     height: 54px !important;
     background: #f8fafc !important;

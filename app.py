@@ -323,29 +323,41 @@ p, li, span, label, div {{ color: #334155 !important; }}
     border: 2px solid #e2e8f0;
     border-radius: 16px;
     padding: 0.8rem 1rem !important;
-    margin-top: 0.2rem;
+    margin-top: 0.8rem;
     transition: border-color 0.2s;
+    user-select: none !important;
 }}
 [data-testid="stCheckbox"]:hover {{
     border-color: {ACCENT} !important;
 }}
-/* Texte du label uniquement, pas de highlight saumon */
+[data-testid="stCheckbox"] label {{
+    background: transparent !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+}}
+[data-testid="stCheckbox"] label:hover,
+[data-testid="stCheckbox"] label:active,
+[data-testid="stCheckbox"] label:focus {{
+    background: transparent !important;
+    color: inherit !important;
+}}
 [data-testid="stCheckbox"] label p {{
     font-size: 0.87rem !important;
     color: #64748b !important;
     line-height: 1.55 !important;
     font-weight: 500 !important;
     background: transparent !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
 }}
-[data-testid="stCheckbox"] label,
-[data-testid="stCheckbox"] label:hover,
-[data-testid="stCheckbox"] label:active {{
-    background: transparent !important;
-}}
-/* Seulement le carré cochable en saumon */
 [data-testid="stCheckbox"] input:checked + div {{
     background: {ACCENT} !important;
     border-color: {ACCENT} !important;
+}}
+
+/* ═══ ESPACEMENT CHAMPS CONTACT ══════════════════════════════════════ */
+[data-testid="stTextInput"] {{
+    margin-bottom: 0.6rem !important;
 }}
 
 /* ═══ CTA BUTTON ═════════════════════════════════════════════════════ */

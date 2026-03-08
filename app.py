@@ -71,44 +71,25 @@ except Exception:
 # ===========================
 st.markdown(f"""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Syne:wght@700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap');
 
 /* ═══ RESET & BASE ═══════════════════════════════════════════════════ */
 html, body, [class*="stApp"] {{
-    font-family: 'Nunito', sans-serif !important;
+    font-family: 'Poppins', sans-serif !important;
     font-size: 15px !important;
-    background: #f5f7ff !important;
+    background: #ffffff !important;
     color: #1e293b !important;
 }}
 .main .block-container {{
-    background: #f5f7ff !important;
+    background: #ffffff !important;
     padding-top: 1.5rem !important;
     max-width: 1280px !important;
 }}
 section[data-testid="stSidebar"] {{ display: none !important; }}
 
-/* ═══ FORMES DÉCORATIVES ═════════════════════════════════════════════ */
-.main .block-container {{ position: relative; }}
-.main .block-container::before {{
-    content: "";
-    position: fixed; top: -120px; right: -120px;
-    width: 400px; height: 400px;
-    background: radial-gradient(circle, rgba(255,126,121,0.18) 0%, transparent 70%);
-    border-radius: 50%;
-    pointer-events: none; z-index: 0;
-}}
-.main .block-container::after {{
-    content: "";
-    position: fixed; bottom: -100px; left: -100px;
-    width: 350px; height: 350px;
-    background: radial-gradient(circle, rgba(6,57,112,0.12) 0%, transparent 70%);
-    border-radius: 50%;
-    pointer-events: none; z-index: 0;
-}}
-
 /* ═══ TYPOGRAPHIE ═════════════════════════════════════════════════════ */
 h2 {{
-    font-family: 'Syne', sans-serif !important;
+    font-family: 'Poppins', sans-serif !important;
     color: {PRIMARY} !important;
     font-size: 1.85rem !important;
     font-weight: 800 !important;
@@ -117,10 +98,10 @@ h2 {{
     line-height: 1.15 !important;
 }}
 h3 {{
-    font-family: 'Nunito', sans-serif !important;
-    color: #334155 !important;
+    font-family: 'Poppins', sans-serif !important;
+    color: #1e293b !important;
     font-size: 1rem !important;
-    font-weight: 800 !important;
+    font-weight: 700 !important;
 }}
 p, li, span, label, div {{ color: #334155 !important; }}
 
@@ -178,26 +159,12 @@ p, li, span, label, div {{ color: #334155 !important; }}
 .form-wrapper {{
     background: white;
     border-radius: 28px;
-    padding: 2rem 1.8rem 1.8rem;
-    box-shadow: 0 8px 40px rgba(6,57,112,0.10);
+    padding: 0.5rem 1.8rem 1.8rem;
+    box-shadow: 0 4px 24px rgba(6,57,112,0.08);
     position: relative; overflow: hidden;
+    border: 1.5px solid #f1f5f9;
 }}
-/* blob déco coin sup droit — éloigné pour ne pas déborder sur les champs */
-.form-wrapper::before {{
-    content: "";
-    position: absolute; top: -110px; right: -110px;
-    width: 260px; height: 260px;
-    background: radial-gradient(circle, rgba(255,126,121,0.07) 0%, transparent 65%);
-    border-radius: 50%; pointer-events: none;
-}}
-/* blob déco coin inf gauche */
-.form-wrapper::after {{
-    content: "";
-    position: absolute; bottom: -60px; left: -60px;
-    width: 180px; height: 180px;
-    background: radial-gradient(circle, rgba(6,57,112,0.09) 0%, transparent 70%);
-    border-radius: 50%; pointer-events: none;
-}}
+.form-wrapper::before, .form-wrapper::after {{ display: none; }}
 
 /* ═══ SECTION PILLS ══════════════════════════════════════════════════ */
 .section-pill {{
@@ -229,11 +196,11 @@ p, li, span, label, div {{ color: #334155 !important; }}
 /* ═══ INPUT TEXT ═════════════════════════════════════════════════════ */
 [data-testid="stTextInput"] input {{
     height: 54px !important;
-    background: #f1f5f9 !important;
-    border: 2px solid transparent !important;
+    background: #f8fafc !important;
+    border: 2px solid #e2e8f0 !important;
     border-radius: 16px !important;
     color: #1e293b !important;
-    font-family: 'Nunito', sans-serif !important;
+    font-family: 'Poppins', sans-serif !important;
     font-size: 0.97rem !important;
     font-weight: 600 !important;
     padding: 0 1.1rem !important;
@@ -254,7 +221,8 @@ p, li, span, label, div {{ color: #334155 !important; }}
 
 /* ═══ NUMBER INPUT ═══════════════════════════════════════════════════ */
 [data-testid="stNumberInput"] {{
-    background: #f1f5f9 !important;
+    background: #f8fafc !important;
+    border: 2px solid #e2e8f0 !important;
     border-radius: 16px !important;
     padding: 0.2rem 0.3rem !important;
 }}
@@ -264,7 +232,7 @@ p, li, span, label, div {{ color: #334155 !important; }}
     border: none !important;
     border-radius: 16px !important;
     color: #1e293b !important;
-    font-family: 'Nunito', sans-serif !important;
+    font-family: 'Poppins', sans-serif !important;
     font-size: 1.1rem !important;
     font-weight: 800 !important;
     padding: 0 0.8rem !important;
@@ -295,12 +263,12 @@ p, li, span, label, div {{ color: #334155 !important; }}
 
 /* ═══ SELECTBOX ══════════════════════════════════════════════════════ */
 [data-testid="stSelectbox"] > div > div {{
-    background: #f1f5f9 !important;
-    border: 2px solid transparent !important;
+    background: #f8fafc !important;
+    border: 2px solid #e2e8f0 !important;
     border-radius: 16px !important;
     min-height: 54px !important;
     color: #1e293b !important;
-    font-family: 'Nunito', sans-serif !important;
+    font-family: 'Poppins', sans-serif !important;
     font-size: 0.97rem !important;
     font-weight: 600 !important;
 }}
@@ -344,7 +312,7 @@ p, li, span, label, div {{ color: #334155 !important; }}
     color: white !important;
     border: none !important;
     border-radius: 18px !important;
-    font-family: 'Nunito', sans-serif !important;
+    font-family: 'Poppins', sans-serif !important;
     font-size: 1.08rem !important;
     font-weight: 900 !important;
     letter-spacing: 0.02em !important;
@@ -473,7 +441,7 @@ p, li, span, label, div {{ color: #334155 !important; }}
     display: block; text-align: center;
     background: {PRIMARY};
     color: white !important;
-    font-family: 'Nunito', sans-serif !important;
+    font-family: 'Poppins', sans-serif !important;
     font-weight: 900 !important;
     font-size: 1rem !important;
     border-radius: 18px;

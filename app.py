@@ -322,12 +322,17 @@ p, li, span, label, div {{ color: #334155 !important; }}
 }}
 [data-testid="stSelectbox"] svg {{ fill: #94a3b8 !important; }}
 
-[data-testid="InputInstructions"] {{ display: none !important; }}
-
-/* Cache le dropdown d'autocomplétion des number inputs uniquement */
-[data-testid="stNumberInput"] ul {{ display: none !important; }}
-[data-testid="stNumberInput"] [role="listbox"] {{ display: none !important; }}
-[data-testid="stNumberInput"] input[type=number]::-webkit-calendar-picker-indicator {{ display: none !important; }}
+[data-testid="InputInstructions"],
+[data-testid="InputInstructions"] *,
+[data-testid="stNumberInputContainer"] ~ div,
+[data-testid="stNumberInput"] > div ~ div {{
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    position: absolute !important;
+    pointer-events: none !important;
+}}
 
 /* ═══ ANTI-CLIP — empêche Streamlit de couper les champs ═════════════ */
 [data-testid="stTextInput"],
@@ -1110,6 +1115,10 @@ with colForm:
                 inp.setAttribute('autocomplete', 'new-password');
                 inp.setAttribute('list', 'autocompleteOff');
                 inp.setAttribute('name', 'search_' + Math.random());
+            });
+            // Cache les instructions / popovers natifs
+            root.querySelectorAll('[data-testid="InputInstructions"]').forEach(function(el) {
+                el.style.setProperty('display', 'none', 'important');
             });
         }
         function attachObservers() {

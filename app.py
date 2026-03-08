@@ -1050,31 +1050,26 @@ with colForm:
 
     st.markdown("<hr class='form-sep'/>", unsafe_allow_html=True)
 
-    # Caractéristiques
+    # Caractéristiques — grille unique 2 colonnes sans espacement entre blocs
     st.markdown("<span class='section-pill'>🏡 Caractéristiques</span>", unsafe_allow_html=True)
 
     # Ligne 1 : Type de bien (pleine largeur)
     st.selectbox("Type de bien", ["Maison", "Appartement"], index=None, key="bien_type", placeholder="Maison ou Appartement ?")
 
-    # Ligne 2 : Surface | Nb. pièces
-    c1, c2 = st.columns(2)
-    with c1:
+    # Ligne 2+3 : tous les champs dans un seul appel st.columns pour éviter les éléments inter-lignes
+    ca, cb = st.columns(2)
+    with ca:
         st.number_input("Surface (m²)", min_value=0.0, max_value=500.0, step=1.0,
                         value=float(st.session_state.surface or 0.0), key="surface")
-    with c2:
-        st.number_input("Nb. de pièces", min_value=0, max_value=12, step=1,
-                        value=int(st.session_state.nb_pieces or 0), key="nb_pieces")
-
-    # Ligne 3 : État général | Dont chambres
-    c3, c4 = st.columns(2)
-    with c3:
         st.selectbox("État général", ["À rénover", "Moyen", "Bon", "Rénové"],
                      index=None, key="etat", placeholder="État du bien…")
         st.markdown(
-            "<div style='margin-top:0.3rem; font-size:0.82rem; color:#94a3b8; font-style:italic; line-height:1.5'>"
+            "<div style='font-size:0.82rem; color:#94a3b8; font-style:italic; line-height:1.5; margin-top:0.2rem'>"
             "L'état influe sur l'estimation. Promis, on ne vous juge pas si c'est \"à rénover\" 😄"
             "</div>", unsafe_allow_html=True)
-    with c4:
+    with cb:
+        st.number_input("Nb. de pièces", min_value=0, max_value=12, step=1,
+                        value=int(st.session_state.nb_pieces or 0), key="nb_pieces")
         st.number_input("Dont chambres", min_value=0, max_value=10, step=1,
                         value=int(st.session_state.nb_chambres or 0), key="nb_chambres")
 

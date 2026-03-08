@@ -244,6 +244,11 @@ p, li, span, label, div {{ color: #334155 !important; }}
     display: flex !important;
     align-items: center !important;
 }}
+[data-testid="stNumberInput"] > div > div {{
+    display: flex !important;
+    align-items: center !important;
+    height: 100% !important;
+}}
 [data-testid="stNumberInput"] input {{
     height: 40px !important;
     background: transparent !important;
@@ -272,14 +277,16 @@ p, li, span, label, div {{ color: #334155 !important; }}
     font-weight: 900 !important;
     font-size: 0.9rem !important;
     box-shadow: 0 1px 4px rgba(6,57,112,0.10) !important;
-    margin: 4px !important;
+    margin: 3px !important;
     width: 32px !important;
     height: 32px !important;
+    min-height: unset !important;
     flex-shrink: 0 !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     padding: 0 !important;
+    align-self: center !important;
 }}
 [data-testid="stNumberInput"] button:hover {{
     background: {ACCENT} !important;

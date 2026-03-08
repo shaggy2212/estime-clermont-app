@@ -1037,6 +1037,42 @@ with colForm:
         "Pas de spam, pas de relance tous les matins. Promis 🙂",
         key="consent",
     )
+    # MutationObserver : supprime le style inline background injecté par BaseWeb sur le label
+    st.components.v1.html("""
+    <script>
+    (function() {
+        function killCheckboxBg() {
+            var root = window.parent.document;
+            var labels = root.querySelectorAll('[data-baseweb="checkbox"] > div:last-child');
+            labels.forEach(function(el) {
+                el.style.removeProperty('background');
+                el.style.removeProperty('background-color');
+                el.style.setProperty('background', 'transparent', 'important');
+                el.style.setProperty('background-color', 'transparent', 'important');
+                // Tous les enfants aussi
+                el.querySelectorAll('*').forEach(function(child) {
+                    child.style.removeProperty('background');
+                    child.style.removeProperty('background-color');
+                    child.style.setProperty('background', 'transparent', 'important');
+                    child.style.setProperty('background-color', 'transparent', 'important');
+                });
+            });
+        }
+        // Observer qui surveille les changements de style
+        var observer = new MutationObserver(function() { killCheckboxBg(); });
+        function startObserver() {
+            var root = window.parent.document.body;
+            if (root) {
+                observer.observe(root, { attributes: true, subtree: true, attributeFilter: ['style', 'class'] });
+                killCheckboxBg();
+            } else {
+                setTimeout(startObserver, 100);
+            }
+        }
+        startObserver();
+    })();
+    </script>
+    """, height=0)
 
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
 

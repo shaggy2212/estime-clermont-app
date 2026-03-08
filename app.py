@@ -1070,15 +1070,13 @@ with colForm:
     with c3:
         st.selectbox("État général", ["À rénover", "Moyen", "Bon", "Rénové"],
                      index=None, key="etat", placeholder="État du bien…")
+        st.markdown(
+            "<div style='margin-top:0.3rem; font-size:0.82rem; color:#94a3b8; font-style:italic; line-height:1.5'>"
+            "L'état influe sur l'estimation. Promis, on ne vous juge pas si c'est \"à rénover\" 😄"
+            "</div>", unsafe_allow_html=True)
     with c4:
         st.number_input("Dont chambres", min_value=0, max_value=10, step=1,
                         value=int(st.session_state.nb_chambres or 0), key="nb_chambres")
-
-with colForm:
-    st.markdown(
-        "<div style='margin-top:0.3rem; font-size:0.82rem; color:#94a3b8; font-style:italic; line-height:1.5'>"
-        "L'état influe sur l'estimation. Promis, on ne vous juge pas si c'est \"à rénover\" 😄"
-        "</div>", unsafe_allow_html=True)
 
     st.markdown("<hr class='form-sep'/>", unsafe_allow_html=True)
 
@@ -1121,6 +1119,27 @@ with colForm:
                 el.style.setProperty('display', 'none', 'important');
             });
         }
+        // Observer dédié pour tuer InputInstructions dès qu'il apparaît dans le DOM
+        function watchInputInstructions() {
+            var root = window.parent.document.body;
+            if (!root) { setTimeout(watchInputInstructions, 200); return; }
+            new MutationObserver(function(mutations) {
+                mutations.forEach(function(m) {
+                    m.addedNodes.forEach(function(node) {
+                        if (node.nodeType !== 1) return;
+                        // Ciblage direct
+                        if (node.dataset && node.dataset.testid === 'InputInstructions') {
+                            node.style.setProperty('display', 'none', 'important');
+                        }
+                        // Ciblage dans les enfants
+                        node.querySelectorAll && node.querySelectorAll('[data-testid="InputInstructions"]').forEach(function(el) {
+                            el.style.setProperty('display', 'none', 'important');
+                        });
+                    });
+                });
+            }).observe(root, { childList: true, subtree: true });
+        }
+        watchInputInstructions();
         function attachObservers() {
             var root = window.parent.document;
             var checkboxes = root.querySelectorAll('[data-baseweb="checkbox"]');

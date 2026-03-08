@@ -107,62 +107,73 @@ p, li, span, label, div {{ color: #334155 !important; }}
 
 /* ═══ CARD INFO (colonne gauche) ═════════════════════════════════════ */
 .info-card {{
-    background: white;
+    background: linear-gradient(145deg, {ACCENT} 0%, #e8635d 100%);
     border-radius: 24px;
-    padding: 1.6rem 1.5rem;
+    padding: 1.8rem 1.6rem;
     margin-bottom: 1rem;
-    box-shadow: 0 4px 24px rgba(6,57,112,0.08);
+    box-shadow: 0 8px 32px rgba(255,126,121,0.30);
     position: relative; overflow: hidden;
 }}
+/* cercle déco blanc en arrière-plan */
 .info-card::before {{
     content: "";
-    position: absolute; top: 0; left: 0; right: 0; height: 4px;
-    background: linear-gradient(90deg, {PRIMARY}, {ACCENT});
-    border-radius: 24px 24px 0 0;
+    position: absolute; top: -60px; right: -60px;
+    width: 200px; height: 200px;
+    background: rgba(255,255,255,0.10);
+    border-radius: 50%;
+    pointer-events: none;
 }}
-/* blob déco dans la card */
 .info-card::after {{
     content: "";
-    position: absolute; bottom: -50px; right: -50px;
+    position: absolute; bottom: -50px; left: -40px;
     width: 160px; height: 160px;
-    background: radial-gradient(circle, rgba(255,126,121,0.10) 0%, transparent 70%);
+    background: rgba(255,255,255,0.07);
     border-radius: 50%;
     pointer-events: none;
 }}
 .info-card ul {{
-    list-style: none; padding: 0; margin: 0.6rem 0 0;
+    list-style: none; padding: 0; margin: 0.8rem 0 0;
 }}
 .info-card ul li {{
-    padding: 0.5rem 0;
+    padding: 0.55rem 0;
     font-size: 0.94rem !important;
-    color: #475569 !important;
-    display: flex; align-items: flex-start; gap: 0.7rem;
-    border-bottom: 1px solid #f1f5f9;
+    color: rgba(255,255,255,0.92) !important;
+    display: flex; align-items: flex-start; gap: 0.75rem;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+    font-weight: 500 !important;
 }}
 .info-card ul li:last-child {{ border-bottom: none; }}
 .info-card ul li .check {{
-    color: {ACCENT} !important;
-    font-weight: 900; flex-shrink: 0; margin-top: 1px;
-    font-size: 1rem !important;
+    background: rgba(255,255,255,0.25);
+    color: white !important;
+    font-weight: 900;
+    flex-shrink: 0;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem !important;
+    margin-top: 1px;
 }}
 .info-note {{
-    background: #eff6ff;
-    border-left: 4px solid {PRIMARY};
+    background: rgba(255,255,255,0.15);
+    border-left: 4px solid rgba(255,255,255,0.5);
     border-radius: 0 16px 16px 0;
     padding: 0.9rem 1.1rem;
     font-size: 0.88rem !important;
-    color: #475569 !important;
+    color: rgba(255,255,255,0.88) !important;
     line-height: 1.6;
 }}
+.info-note b {{ color: white !important; font-weight: 700 !important; }}
 
 /* ═══ FORM WRAPPER (colonne droite) ══════════════════════════════════ */
 .form-wrapper {{
     background: white;
     border-radius: 28px;
-    padding: 0.5rem 1.8rem 1.8rem;
+    padding: 0.5rem 1.8rem 2rem;
     box-shadow: 0 4px 24px rgba(6,57,112,0.08);
-    position: relative; overflow: hidden;
+    position: relative;
     border: 1.5px solid #f1f5f9;
+    overflow: visible;
 }}
 .form-wrapper::before, .form-wrapper::after {{ display: none; }}
 
@@ -892,15 +903,15 @@ colInfo, colForm = st.columns([0.88, 1.28], gap="large")
 
 # ── Colonne Info ─────────────────────────────────────────────────────
 with colInfo:
-    st.markdown("## Ce que vous recevez")
     st.markdown("""
     <div class="info-card">
+      <p style="font-family:'Poppins',sans-serif; font-size:1.6rem; font-weight:800; color:white; margin:0 0 0.2rem; letter-spacing:-0.02em; line-height:1.2">Ce que vous recevez</p>
       <ul>
-        <li><span class="check">✦</span> Une fourchette de prix réaliste, basée sur les ventes récentes de votre secteur</li>
-        <li><span class="check">✦</span> Le prix médian au m² pratiqué dans votre quartier ces 12 derniers mois</li>
-        <li><span class="check">✦</span> Des biens comparables au vôtre — même type, surface similaire, même zone</li>
-        <li><span class="check">✦</span> Un indice d'attractivité de votre secteur (est-ce que les biens partent vite ?)</li>
-        <li><span class="check">✦</span> Une estimation affinée selon l'état, la surface, les pièces et la localisation</li>
+        <li><span class="check">✓</span> Une fourchette de prix réaliste, basée sur les ventes récentes de votre secteur</li>
+        <li><span class="check">✓</span> Le prix médian au m² pratiqué dans votre quartier ces 12 derniers mois</li>
+        <li><span class="check">✓</span> Des biens comparables au vôtre — même type, surface similaire, même zone</li>
+        <li><span class="check">✓</span> Un indice d'attractivité de votre secteur (est-ce que les biens partent vite ?)</li>
+        <li><span class="check">✓</span> Une estimation affinée selon l'état, la surface, les pièces et la localisation</li>
       </ul>
     </div>
     """, unsafe_allow_html=True)

@@ -478,7 +478,7 @@ p, li, span, label, div {{ color: #334155 !important; }}
 .result-metric::before {{
     content: ""; position: absolute;
     top: 0; left: 0; right: 0; height: 4px;
-    background: linear-gradient(90deg, {PRIMARY}, {ACCENT});
+    background: {ACCENT};
     border-radius: 20px 20px 0 0;
 }}
 .result-metric .mk {{
@@ -488,7 +488,7 @@ p, li, span, label, div {{ color: #334155 !important; }}
 }}
 .result-metric .mv {{
     font-size: 1.4rem !important; font-weight: 900 !important;
-    color: {PRIMARY} !important; margin: 0.25rem 0 0;
+    color: {ACCENT} !important; margin: 0.25rem 0 0;
     letter-spacing: -0.02em;
 }}
 
@@ -510,7 +510,7 @@ p, li, span, label, div {{ color: #334155 !important; }}
     border-radius: 0 18px 18px 0;
     padding: 1rem 1.2rem;
     margin: 0.8rem 0;
-    font-size: 0.94rem !important;
+    font-size: 1.05rem !important;
     line-height: 1.65;
     color: #334155 !important;
 }}
@@ -521,7 +521,7 @@ p, li, span, label, div {{ color: #334155 !important; }}
 }}
 .disclaimer-list li {{
     padding: 0.32rem 0;
-    font-size: 0.93rem !important;
+    font-size: 1.0rem !important;
     color: #64748b !important;
     display: flex; align-items: flex-start; gap: 0.55rem;
     font-weight: 600 !important;
@@ -703,14 +703,14 @@ def normalize_type_local(x: Any) -> str:
     return "Autre"
 
 def tension_context_message(tscore: int) -> str:
-    if tscore >= 75:
+    if tscore >= 60:
         return "🔥 <b>Votre secteur est actuellement très recherché.</b> Les biens similaires partent vite et les prix se tiennent bien. C'est le bon moment pour vendre, à condition de bien positionner le prix dès le départ."
-    elif tscore >= 55:
+    elif tscore >= 40:
         return "⚡ <b>Le marché est actif sur votre secteur.</b> Les acheteurs sont présents, mais ils comparent. Une mise en valeur soignée et un prix juste feront toute la différence."
-    elif tscore >= 35:
+    elif tscore >= 22:
         return "🙂 <b>Le marché est équilibré.</b> Ni en surchauffe, ni en pause. Les biens bien présentés et correctement positionnés se vendent sans trop traîner."
     else:
-        return "🧊 <b>Le marché est plus calme en ce moment.</b> Ça ne veut pas dire que votre bien ne se vendra pas — ça veut dire que la stratégie de prix et la présentation vont compter encore plus que d'habitude."
+        return "📈 <b>Le marché est stable sur votre secteur.</b> Les transactions se font à un rythme posé — ce qui veut dire que le prix de départ et la présentation du bien sont les deux leviers les plus importants pour vendre dans de bonnes conditions."
 
 def is_form_ready() -> Tuple[bool, int]:
     checks = [
@@ -892,8 +892,8 @@ def market_tension_index(df_local: pd.DataFrame, used_radius: int) -> Dict[str, 
     score = float(clamp(
         0.45*100*(1-np.exp(-density/18)) + 0.35*100*np.exp(-days_since/95) + 0.20*100*np.exp(-iqr_ratio/0.18),
         0, 100))
-    label = ("🔥 Très attractif" if score>=75 else "⚡ Attractif" if score>=55
-             else "🙂 Équilibré" if score>=35 else "🧊 Plus calme")
+    label = ("🔥 Très attractif" if score>=60 else "⚡ Attractif" if score>=40
+             else "🙂 Équilibré" if score>=22 else "📈 Marché stable")
     return {"score": int(round(score)), "label": label,
             "detail": f"Densité ~{density:.1f}/km² · Dernière vente {days_since}j · IQR ~{iqr_ratio:.2f}"}
 
@@ -908,7 +908,7 @@ def compute_adjustments(bien_type, surface, nb_pieces, nb_chambres, etat, distan
 
 def band_from_reliability_and_tension(n, tension_score, bien_type):
     pct  = 0.060 if n>15 else 0.070 if n>=8 else 0.085 if n>=4 else 0.105 if n>=2 else 0.140
-    pct *= 0.90 if tension_score>=75 else 0.95 if tension_score>=55 else 1.00 if tension_score>=35 else 1.08
+    pct *= 0.90 if tension_score>=60 else 0.95 if tension_score>=40 else 1.00 if tension_score>=22 else 1.08
     return float(pct), ((6500.0,15000.0) if normalize_type_local(bien_type)=="Appartement" else (9000.0,22000.0))
 
 def compute_micro_market_estimate(df_all, lat, lon, bien_type, surface, nb_pieces, nb_chambres, etat):
@@ -936,7 +936,7 @@ def compute_micro_market_estimate(df_all, lat, lon, bien_type, surface, nb_piece
     adj_factor = adj["etat"]*adj["pieces"]*adj["chambres"]*adj["gare"]*adj["scale"]
     tension    = market_tension_index(df_local, used_radius if used_radius else 0)
     tscore     = int(tension.get("score", 0))
-    tilt       = 0.022 if tscore>=75 else 0.012 if tscore>=55 else 0.0 if tscore>=35 else -0.018
+    tilt       = 0.022 if tscore>=60 else 0.012 if tscore>=40 else 0.0 if tscore>=22 else -0.018
     center     = pm2_med * surface * adj_factor * (1.0+tilt)
     band_pct, (abs_min, abs_max) = band_from_reliability_and_tension(n, tscore, target_type)
     full_width = clamp(max(1.0, center*band_pct), abs_min, abs_max)
@@ -1315,14 +1315,16 @@ if st.session_state.result_payload and st.session_state.geo:
 
     map_points = hp.get("map_points", [])
     if map_points:
-        st.markdown("### 🗺️ Localisation des ventes comparables")
+        st.markdown(
+            f"<h3 style='color:{PRIMARY}; font-family:Poppins,sans-serif; font-weight:800; margin-top:1.5rem'>🗺️ Localisation des ventes comparables</h3>",
+            unsafe_allow_html=True)
         st.caption("Position légèrement floue pour respecter la vie privée des vendeurs.")
         bien_point = pd.DataFrame([{"lat": float(geo["lat"]), "lon": float(geo["lon"])}])
         st.map(pd.concat([bien_point, pd.DataFrame(map_points)], ignore_index=True), zoom=14)
 
     st.markdown(
         "<div class='result-card'>"
-        "<b style='color:#94a3b8'>Ce que les données ne peuvent pas voir à votre place :</b>"
+        "<b style='color:#334155; font-size:1.05rem'>Ce que les données ne peuvent pas voir à votre place :</b>"
         "<ul class='disclaimer-list'>"
         "<li>Les nuisances (route, voisinage, bruit, vis-à-vis…)</li>"
         "<li>La luminosité et l'exposition</li>"
@@ -1331,7 +1333,7 @@ if st.session_state.result_payload and st.session_state.geo:
         "<li>L'agencement, les volumes, l'entretien</li>"
         "<li>Les extérieurs, cave, garage, stationnement, charges de copropriété…</li>"
         "</ul>"
-        "<span style='color:#64748b; font-size:0.92rem'>Cette fourchette est une <b style='color:#94a3b8'>base solide et honnête</b>. "
+        "<span style='color:#64748b; font-size:1.0rem'>Cette fourchette est une <b style='color:#334155'>base solide et honnête</b>. "
         "Mais pour un chiffre vraiment précis et des conseils adaptés à votre projet, rien ne vaut un échange de vive voix.</span>"
         "</div>", unsafe_allow_html=True)
 
@@ -1340,7 +1342,7 @@ if st.session_state.result_payload and st.session_state.geo:
         f"<div class='booking-btn'><a href='{BOOKING_URL}' target='_blank'>"
         f"📞 Affiner cette estimation avec Hakim — RDV gratuit, sans engagement"
         f"</a></div>", unsafe_allow_html=True)
-    st.caption("Un échange de 20 minutes pour un chiffre précis et des conseils pour valoriser votre bien.")
+    st.caption("Un échange téléphonique de 20 minutes pour un chiffre précis et des conseils pour valoriser votre bien.")
 
     if tens.get("detail"):
         st.caption(f"📌 {tens['detail']}")

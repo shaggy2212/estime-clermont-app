@@ -615,9 +615,11 @@ def parse_display_choice(display_value: str) -> Tuple[Optional[str], str]:
 
 def on_addr_choice_display_change():
     display_val = st.session_state.get("addr_choice_display", "")
-    area, label = parse_display_choice(display_val)
-    st.session_state.addr_choice = label
-    if area:
+    geo_map = st.session_state.get("_suggestion_geo_map", {})
+    geo = geo_map.get(display_val, {})
+    st.session_state.addr_choice = display_val
+    area = geo.get("_area")
+    if area and area in AREAS:
         st.session_state.detected_area = area
         st.session_state.area_locked   = True
 
@@ -974,15 +976,22 @@ with colForm:
     suggestion_geo_map: Dict[str, Dict] = {}
 
     if len(typed) >= 2:
+        seen_labels = set()
         if st.session_state.area_name == AUTO_AREA:
             for area_name, info in AREAS.items():
                 for res in ban_completion(typed, postcode=info["postcode"], limit=3):
-                    display = f"{area_name} — {res['label']}"
-                    suggestions_display.append(display)
-                    suggestion_geo_map[display] = res
+                    label = res["label"]
+                    if label not in seen_labels:
+                        seen_labels.add(label)
+                        suggestions_display.append(label)
+                        suggestion_geo_map[label] = {**res, "_area": area_name}
         else:
             for res in ban_completion(typed, postcode=ai["postcode"], limit=7):
-                suggestions_display.append(res["label"])
+                label = res["label"]
+                if label not in seen_labels:
+                    seen_labels.add(label)
+                    suggestions_display.append(label)
+                    suggestion_geo_map[label] = res
                 suggestion_geo_map[res["label"]] = res
 
     st.session_state["_suggestion_geo_map"] = suggestion_geo_map

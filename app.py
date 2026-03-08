@@ -677,11 +677,11 @@ def normalize_type_local(x: Any) -> str:
     return "Autre"
 
 def tension_context_message(tscore: int) -> str:
-    if tscore >= 60:
+    if tscore >= 65:
         return "🔥 <b>Votre secteur est actuellement très recherché.</b> Les biens similaires partent vite et les prix se tiennent bien. C'est le bon moment pour vendre, à condition de bien positionner le prix dès le départ."
-    elif tscore >= 40:
+    elif tscore >= 45:
         return "⚡ <b>Le marché est actif sur votre secteur.</b> Les acheteurs sont présents, mais ils comparent. Une mise en valeur soignée et un prix juste feront toute la différence."
-    elif tscore >= 22:
+    elif tscore >= 28:
         return "🙂 <b>Le marché est équilibré.</b> Ni en surchauffe, ni en pause. Les biens bien présentés et correctement positionnés se vendent sans trop traîner."
     else:
         return "📈 <b>Le marché est stable sur votre secteur.</b> Les transactions se font à un rythme posé — ce qui veut dire que le prix de départ et la présentation du bien sont les deux leviers les plus importants pour vendre dans de bonnes conditions."
@@ -857,17 +857,34 @@ def market_tension_index(df_local: pd.DataFrame, used_radius: int) -> Dict[str, 
     n          = int(len(df_local))
     area_km2   = np.pi * (used_radius/1000.0)**2
     density    = n / max(1e-6, area_km2)
+
+    # Score densité : calibré pour un petit marché (1-3/km² = normal, 5+/km² = actif)
+    # exp(-density/4) → 1/km² donne ~22pts, 3/km² ~53pts, 6/km² ~78pts
+    s_density  = 100 * (1 - np.exp(-density / 4))
+
+    # Score fraîcheur : dernière vente < 90j = très bon, < 180j = correct
     last_date  = pd.to_datetime(df_local["date_mutation"]).max()
     days_since = int(max(0,(pd.Timestamp.utcnow().tz_localize(None)-pd.to_datetime(last_date).tz_localize(None)).days))
+    s_recency  = 100 * np.exp(-days_since / 120)
+
+    # Score volume brut : bonus si plus de 4 ventes dans le rayon min (600m)
+    df_close   = df_local[df_local.get("distance_m", pd.Series([used_radius]*n)) <= 800] if "distance_m" in df_local.columns else df_local
+    s_volume   = float(clamp(len(df_close) / 8 * 100, 0, 100))
+
+    # Score homogénéité prix (IQR faible = marché stable et lisible)
     pm2 = pd.to_numeric(df_local.get("prix_m2"), errors="coerce").replace([np.inf,-np.inf], np.nan).dropna()
     iqr_ratio = 1.0
     if not pm2.empty:
-        iqr_ratio = max(1.0, float(pm2.quantile(0.75))-float(pm2.quantile(0.25))) / max(1.0, float(pm2.median()))
+        iqr_ratio = (float(pm2.quantile(0.75)) - float(pm2.quantile(0.25))) / max(1.0, float(pm2.median()))
+    s_homo = 100 * np.exp(-iqr_ratio / 0.25)
+
+    # Score global pondéré
     score = float(clamp(
-        0.45*100*(1-np.exp(-density/18)) + 0.35*100*np.exp(-days_since/95) + 0.20*100*np.exp(-iqr_ratio/0.18),
+        0.40 * s_density + 0.30 * s_recency + 0.20 * s_volume + 0.10 * s_homo,
         0, 100))
-    label = ("🔥 Très attractif" if score>=60 else "⚡ Attractif" if score>=40
-             else "🙂 Équilibré" if score>=22 else "📈 Marché stable")
+
+    label = ("🔥 Très attractif" if score >= 65 else "⚡ Attractif" if score >= 45
+             else "🙂 Équilibré" if score >= 28 else "📈 Marché stable")
     return {"score": int(round(score)), "label": label,
             "detail": f"Densité ~{density:.1f}/km² · Dernière vente {days_since}j · IQR ~{iqr_ratio:.2f}"}
 
@@ -882,7 +899,7 @@ def compute_adjustments(bien_type, surface, nb_pieces, nb_chambres, etat, distan
 
 def band_from_reliability_and_tension(n, tension_score, bien_type):
     pct  = 0.060 if n>15 else 0.070 if n>=8 else 0.085 if n>=4 else 0.105 if n>=2 else 0.140
-    pct *= 0.90 if tension_score>=60 else 0.95 if tension_score>=40 else 1.00 if tension_score>=22 else 1.08
+    pct *= 0.90 if tension_score>=65 else 0.95 if tension_score>=45 else 1.00 if tension_score>=28 else 1.08
     return float(pct), ((6500.0,15000.0) if normalize_type_local(bien_type)=="Appartement" else (9000.0,22000.0))
 
 def compute_micro_market_estimate(df_all, lat, lon, bien_type, surface, nb_pieces, nb_chambres, etat):
@@ -910,7 +927,7 @@ def compute_micro_market_estimate(df_all, lat, lon, bien_type, surface, nb_piece
     adj_factor = adj["etat"]*adj["pieces"]*adj["chambres"]*adj["gare"]*adj["scale"]
     tension    = market_tension_index(df_local, used_radius if used_radius else 0)
     tscore     = int(tension.get("score", 0))
-    tilt       = 0.022 if tscore>=60 else 0.012 if tscore>=40 else 0.0 if tscore>=22 else -0.018
+    tilt       = 0.022 if tscore>=65 else 0.012 if tscore>=45 else 0.0 if tscore>=28 else -0.018
     center     = pm2_med * surface * adj_factor * (1.0+tilt)
     band_pct, (abs_min, abs_max) = band_from_reliability_and_tension(n, tscore, target_type)
     full_width = clamp(max(1.0, center*band_pct), abs_min, abs_max)

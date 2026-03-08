@@ -977,16 +977,21 @@ with colForm:
 
     if len(typed) >= 2:
         seen_labels = set()
+        allowed_cities = {info["city"].lower() for info in AREAS.values()}
         if st.session_state.area_name == AUTO_AREA:
             for area_name, info in AREAS.items():
-                for res in ban_completion(typed, postcode=info["postcode"], limit=3):
+                for res in ban_completion(typed, postcode=info["postcode"], limit=5):
+                    if res.get("city", "").lower() not in allowed_cities:
+                        continue
                     label = res["label"]
                     if label not in seen_labels:
                         seen_labels.add(label)
                         suggestions_display.append(label)
                         suggestion_geo_map[label] = {**res, "_area": area_name}
         else:
-            for res in ban_completion(typed, postcode=ai["postcode"], limit=7):
+            for res in ban_completion(typed, postcode=ai["postcode"], limit=10):
+                if res.get("city", "").lower() not in allowed_cities:
+                    continue
                 label = res["label"]
                 if label not in seen_labels:
                     seen_labels.add(label)

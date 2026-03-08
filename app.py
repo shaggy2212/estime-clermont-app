@@ -1311,8 +1311,8 @@ if st.session_state.result_payload and st.session_state.geo:
 
     st.markdown(
         "<div class='result-card'>"
-        "<p style='font-style:italic; color:#94a3b8; font-size:0.95rem; margin:0 0 0.8rem 0;'>Faire une estimation à distance, c'est bien. Voir le bien, c'est mieux.</p>"
-        "<b style='color:#334155; font-size:1.05rem'>Ce que les données ne peuvent pas voir à votre place :</b>"
+        "<h3 style='font-family:Poppins,sans-serif; font-weight:800; color:#063970; margin:0 0 0.8rem 0; font-size:1.25rem;'>Faire une estimation à distance, c'est bien. Voir le bien, c'est mieux.</h3>"
+        "<b style='color:#334155; font-size:1.1rem'>Ce que les données ne peuvent pas voir à votre place :</b>"
         "<ul class='disclaimer-list'>"
         "<li>Les nuisances (route, voisinage, bruit, vis-à-vis…)</li>"
         "<li>La luminosité et l'exposition</li>"

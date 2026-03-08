@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 import requests
 import time
-import pydeck as pdk
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 
@@ -1176,6 +1175,15 @@ with colForm:
             fixNumberInputs();
         }
         attachObservers();
+
+        // Bloque le scroll zoom sur la carte Streamlit
+        function blockMapScroll() {
+            var root = window.parent.document;
+            root.querySelectorAll('[data-testid="stDeckGlJsonChart"] canvas, [class*="mapboxgl-canvas"]').forEach(function(el) {
+                el.addEventListener('wheel', function(e) { e.stopPropagation(); }, { passive: false });
+            });
+        }
+        setTimeout(blockMapScroll, 2000);
     })();
     </script>
     """, height=0)
@@ -1327,21 +1335,21 @@ if st.session_state.result_payload and st.session_state.geo:
             f"<h2 style='color:{PRIMARY}; font-family:Poppins,sans-serif; font-weight:800; margin-top:1.5rem; font-size:1.6rem'>🗺️ Localisation des ventes comparables</h2>",
             unsafe_allow_html=True)
         st.caption("Position légèrement floue pour respecter la vie privée des vendeurs.")
-        all_pts = [{"lat": float(geo["lat"]), "lon": float(geo["lon"]), "color": [6,57,112,220], "radius": 18}]
-        for pt in map_points:
-            all_pts.append({"lat": float(pt["lat"]), "lon": float(pt["lon"]), "color": [255,126,121,200], "radius": 14})
-        deck = pdk.Deck(
-            map_style="mapbox://styles/mapbox/light-v10",
-            initial_view_state=pdk.ViewState(
-                latitude=float(geo["lat"]), longitude=float(geo["lon"]),
-                zoom=14, pitch=0),
-            layers=[pdk.Layer(
-                "ScatterplotLayer", data=all_pts,
-                get_position=["lon","lat"],
-                get_fill_color="color", get_radius="radius",
-                pickable=False)],
-            controller={"scrollZoom": False, "dragRotate": False})
-        st.pydeck_chart(deck, use_container_width=True)
+        bien_point = pd.DataFrame([{
+            "lat": float(geo["lat"]), "lon": float(geo["lon"]),
+            "color": "#063970", "size": 120
+        }])
+        comp_points = pd.DataFrame([{
+            "lat": float(p["lat"]), "lon": float(p["lon"]),
+            "color": "#FF7E79", "size": 80
+        } for p in map_points])
+        df_map = pd.concat([bien_point, comp_points], ignore_index=True)
+        st.map(df_map, zoom=14, color="color", size="size")
+        st.markdown(
+            "<div style='display:flex; gap:1.5rem; margin-top:0.5rem; font-size:0.85rem; color:#64748b; font-family:Poppins,sans-serif'>"
+            "<span><span style='display:inline-block;width:12px;height:12px;border-radius:50%;background:#063970;margin-right:5px;vertical-align:middle'></span>Votre bien</span>"
+            "<span><span style='display:inline-block;width:12px;height:12px;border-radius:50%;background:#FF7E79;margin-right:5px;vertical-align:middle'></span>Ventes comparables</span>"
+            "</div>", unsafe_allow_html=True)
 
     st.markdown(
         "<div class='result-card'>"

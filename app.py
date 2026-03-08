@@ -209,17 +209,16 @@ p, li, span, label, div {{ color: #334155 !important; }}
 }}
 
 /* ═══ INPUT TEXT ═════════════════════════════════════════════════════ */
-/* Neutralise la bordure native BaseWeb */
-[data-testid="stTextInput"] > div > div {{
+/* Neutralise TOUTES les bordures natives BaseWeb/Streamlit */
+[data-testid="stTextInput"] > div,
+[data-testid="stTextInput"] > div > div,
+[data-testid="stTextInput"] > div > div > div,
+[data-baseweb="base-input"],
+[data-baseweb="input-container"] {{
     border: none !important;
     box-shadow: none !important;
     background: transparent !important;
-    overflow: visible !important;
-}}
-[data-baseweb="base-input"] {{
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
+    outline: none !important;
 }}
 [data-testid="stTextInput"] input {{
     height: 54px !important;

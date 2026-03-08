@@ -1105,8 +1105,9 @@ with colForm:
         function fixNumberInputs() {
             var root = window.parent.document;
             root.querySelectorAll('[data-testid="stNumberInput"] input').forEach(function(inp) {
-                inp.setAttribute('autocomplete', 'off');
+                inp.setAttribute('autocomplete', 'new-password');
                 inp.setAttribute('list', 'autocompleteOff');
+                inp.setAttribute('name', 'search_' + Math.random());
             });
         }
         function attachObservers() {

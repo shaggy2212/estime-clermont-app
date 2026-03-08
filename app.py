@@ -1014,7 +1014,7 @@ with colForm:
 
     # Adresse
     st.text_input("", placeholder="🏠  Adresse du bien — ex : 5 Rue de la République", key="addr_typed")
-    st.markdown("<div class='addr-helper'>📍 App 100% locale — seules les adresses de Clermont-de-l'Oise et ses communes voisines sont disponibles.</div>",
+    st.markdown("<div class='addr-helper'> App 100% locale — seules les adresses de Clermont-de-l'Oise et ses communes voisines sont disponibles.</div>",
                 unsafe_allow_html=True)
 
     typed = (st.session_state.addr_typed or "").strip()

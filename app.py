@@ -1068,6 +1068,8 @@ with colForm:
     with c4:
         st.number_input("Dont chambres", min_value=0, max_value=10, step=1,
                         value=int(st.session_state.nb_chambres or 0), key="nb_chambres")
+
+with colForm:
     st.markdown(
         "<div style='margin-top:0.3rem; font-size:0.82rem; color:#94a3b8; font-style:italic; line-height:1.5'>"
         "L'état influe sur l'estimation. Promis, on ne vous juge pas si c'est \"à rénover\" 😄"

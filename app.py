@@ -1384,7 +1384,8 @@ if st.session_state.result_payload and st.session_state.geo:
         st.pydeck_chart(pdk.Deck(
             layers=[layer_comp, layer_bien],
             initial_view_state=view,
-            map_style="mapbox://styles/mapbox/light-v10"),
+            map_style="mapbox://styles/mapbox/light-v10",
+            tooltip=False),
             use_container_width=True)
 
         st.markdown(

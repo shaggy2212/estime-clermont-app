@@ -210,27 +210,34 @@ p, li, span, label, div {{ color: #334155 !important; }}
 
 /* ═══ INPUT TEXT ═════════════════════════════════════════════════════ */
 [data-testid="stTextInput"] > div {{
+    background: #f8fafc !important;
+    border: 2px solid #e2e8f0 !important;
     border-radius: 16px !important;
     overflow: visible !important;
+    transition: border-color 0.2s, box-shadow 0.2s !important;
+}}
+[data-testid="stTextInput"] > div:focus-within {{
+    background: white !important;
+    border-color: {ACCENT} !important;
+    box-shadow: 0 0 0 4px rgba(255,126,121,0.12) !important;
 }}
 [data-testid="stTextInput"] input {{
     height: 54px !important;
-    background: #f8fafc !important;
-    border: 2px solid #e2e8f0 !important;
+    background: transparent !important;
+    border: none !important;
     border-radius: 16px !important;
     color: #1e293b !important;
     font-family: 'Poppins', sans-serif !important;
     font-size: 0.97rem !important;
     font-weight: 600 !important;
     padding: 0 1.1rem !important;
-    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s !important;
+    outline: none !important;
+    box-shadow: none !important;
     caret-color: {ACCENT} !important;
 }}
 [data-testid="stTextInput"] input:focus {{
-    background: white !important;
-    border-color: {ACCENT} !important;
-    box-shadow: 0 0 0 4px rgba(255,126,121,0.12) !important;
     outline: none !important;
+    box-shadow: none !important;
 }}
 [data-testid="stTextInput"] input::placeholder {{
     color: #94a3b8 !important;

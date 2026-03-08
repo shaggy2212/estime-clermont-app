@@ -173,7 +173,7 @@ p, li, span, label, div {{ color: #334155 !important; }}
 .form-wrapper {{
     background: white;
     border-radius: 28px;
-    padding: 0 1.8rem 2rem;
+    padding: 0.3rem 1.8rem 2rem;
     box-shadow: 0 4px 24px rgba(6,57,112,0.08);
     position: relative;
     border: 1.5px solid #f1f5f9;
@@ -946,7 +946,7 @@ with colInfo:
 with colForm:
     st.markdown("""
     <div class='form-wrapper'>
-    <h2 style='font-family:Poppins,sans-serif;color:#063970;font-size:1.85rem;font-weight:800;margin:1.2rem 0 1.1rem;letter-spacing:-0.02em;line-height:1.15'>Parlez-moi de votre bien</h2>
+    <h2 style='font-family:Poppins,sans-serif;color:#063970;font-size:1.85rem;font-weight:800;margin:0.8rem 0 0.6rem;letter-spacing:-0.02em;line-height:1.15'>Parlez-moi de votre bien</h2>
     """, unsafe_allow_html=True)
 
     # Commune

@@ -152,17 +152,22 @@ p, li, span, label, div {{ color: #334155 !important; }}
     font-size: 0.85rem !important;
     margin-top: 1px;
 }}
+/* Force blanc sur TOUS les enfants de info-card contre le sélecteur global */
+.info-card p, .info-card li, .info-card span, .info-card div {{
+    color: white !important;
+}}
 .info-note {{
-    background: rgba(255,255,255,0.18);
-    border-left: 4px solid rgba(255,255,255,0.6);
+    background: white;
+    border-left: 4px solid {PRIMARY};
     border-radius: 0 16px 16px 0;
     padding: 1rem 1.2rem;
     font-size: 0.93rem !important;
-    color: white !important;
     line-height: 1.65;
-    font-weight: 500 !important;
+    margin-top: 0.8rem;
+    box-shadow: 0 2px 12px rgba(6,57,112,0.08);
 }}
-.info-note b, .info-note * {{ color: white !important; font-weight: 700 !important; }}
+.info-note b {{ color: {PRIMARY} !important; font-weight: 700 !important; }}
+.info-note span {{ color: #334155 !important; font-weight: 500 !important; }}
 
 /* ═══ FORM WRAPPER (colonne droite) ══════════════════════════════════ */
 .form-wrapper {{
@@ -919,7 +924,7 @@ colInfo, colForm = st.columns([0.88, 1.28], gap="large")
 with colInfo:
     st.markdown("""
     <div class="info-card">
-      <p style="font-family:'Poppins',sans-serif; font-size:1.6rem; font-weight:800; color:white; margin:0 0 0.2rem; letter-spacing:-0.02em; line-height:1.2">Ce que vous recevez</p>
+      <p style="font-family:'Poppins',sans-serif; font-size:1.6rem; font-weight:800; color:white !important; margin:0 0 0.2rem; letter-spacing:-0.02em; line-height:1.2">Ce que vous recevez</p>
       <ul>
         <li><span class="check">✓</span> Une fourchette de prix réaliste, basée sur les ventes récentes de votre secteur</li>
         <li><span class="check">✓</span> Le prix médian au m² pratiqué dans votre quartier ces 12 derniers mois</li>
@@ -931,16 +936,18 @@ with colInfo:
     """, unsafe_allow_html=True)
     st.markdown("""
     <div class="info-note">
-      🔎 <b style="color:#94a3b8">Une estimation honnête, pas magique.</b><br>
-      Les données viennent des ventes officiellement enregistrées (source : data.gouv.fr, màj novembre 2025).
-      On croise avec ce que vous indiquez pour rester au plus juste. Pas de chiffre sorti du chapeau.
+      🔎 <b style="color:#063970 !important; font-weight:700">Une estimation honnête, pas magique.</b><br>
+      <span style="color:#334155 !important">Les données viennent des ventes officiellement enregistrées (source : data.gouv.fr, màj novembre 2025).
+      On croise avec ce que vous indiquez pour rester au plus juste. Pas de chiffre sorti du chapeau.</span>
     </div>
     """, unsafe_allow_html=True)
 
 # ── Colonne Formulaire ───────────────────────────────────────────────
 with colForm:
-    st.markdown("<div class='form-wrapper'>", unsafe_allow_html=True)
-    st.markdown("<h2 style='font-family:Poppins,sans-serif;color:#063970;font-size:1.85rem;font-weight:800;margin:1.2rem 0 1.1rem;letter-spacing:-0.02em;line-height:1.15'>Parlez-moi de votre bien</h2>", unsafe_allow_html=True)
+    st.markdown("""
+    <div class='form-wrapper'>
+    <h2 style='font-family:Poppins,sans-serif;color:#063970;font-size:1.85rem;font-weight:800;margin:1.2rem 0 1.1rem;letter-spacing:-0.02em;line-height:1.15'>Parlez-moi de votre bien</h2>
+    """, unsafe_allow_html=True)
 
     # Commune
     st.markdown("<span class='section-pill'>📍 Localisation</span>", unsafe_allow_html=True)

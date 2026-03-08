@@ -1037,39 +1037,32 @@ with colForm:
         "Pas de spam, pas de relance tous les matins. Promis 🙂",
         key="consent",
     )
-    # MutationObserver : supprime le style inline background injecté par BaseWeb sur le label
+    # MutationObserver ciblé : efface uniquement le background inline du label BaseWeb
     st.components.v1.html("""
     <script>
     (function() {
-        function killCheckboxBg() {
+        function fixLabel() {
             var root = window.parent.document;
-            var labels = root.querySelectorAll('[data-baseweb="checkbox"] > div:last-child');
-            labels.forEach(function(el) {
-                el.style.removeProperty('background');
-                el.style.removeProperty('background-color');
-                el.style.setProperty('background', 'transparent', 'important');
-                el.style.setProperty('background-color', 'transparent', 'important');
-                // Tous les enfants aussi
-                el.querySelectorAll('*').forEach(function(child) {
-                    child.style.removeProperty('background');
-                    child.style.removeProperty('background-color');
-                    child.style.setProperty('background', 'transparent', 'important');
-                    child.style.setProperty('background-color', 'transparent', 'important');
+            root.querySelectorAll('[data-baseweb="checkbox"]').forEach(function(cb) {
+                var label = cb.querySelector('div:last-child');
+                if (label) {
+                    label.style.setProperty('background', 'transparent', 'important');
+                    label.style.setProperty('background-color', 'transparent', 'important');
+                }
+            });
+        }
+        function attachObservers() {
+            var root = window.parent.document;
+            var checkboxes = root.querySelectorAll('[data-baseweb="checkbox"]');
+            if (!checkboxes.length) { setTimeout(attachObservers, 200); return; }
+            checkboxes.forEach(function(cb) {
+                fixLabel();
+                new MutationObserver(fixLabel).observe(cb, {
+                    attributes: true, subtree: true, attributeFilter: ['style']
                 });
             });
         }
-        // Observer qui surveille les changements de style
-        var observer = new MutationObserver(function() { killCheckboxBg(); });
-        function startObserver() {
-            var root = window.parent.document.body;
-            if (root) {
-                observer.observe(root, { attributes: true, subtree: true, attributeFilter: ['style', 'class'] });
-                killCheckboxBg();
-            } else {
-                setTimeout(startObserver, 100);
-            }
-        }
-        startObserver();
+        attachObservers();
     })();
     </script>
     """, height=0)

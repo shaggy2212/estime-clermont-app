@@ -1452,6 +1452,8 @@ if st.session_state.result_payload and st.session_state.geo:
             "<span><span style='display:inline-block;width:12px;height:12px;border-radius:50%;background:#FF7E79;opacity:0.65;margin-right:5px;vertical-align:middle'></span>Ventes comparables</span>"
             "</div>", unsafe_allow_html=True)
 
+    st.markdown("<div style='height:2rem'></div>", unsafe_allow_html=True)
+
     st.markdown(
         "<div class='result-card'>"
         "<p style='font-style:italic; color:#94a3b8; font-size:1.05rem; margin:0 0 1rem 0; font-weight:400;'>Estimer votre maison à distance c'est bien, mais la voir en vrai c'est mieux 😃</p>"

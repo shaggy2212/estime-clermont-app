@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import requests
 import time
+import pydeck as pdk
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 
@@ -1335,20 +1336,45 @@ if st.session_state.result_payload and st.session_state.geo:
             f"<h2 style='color:{PRIMARY}; font-family:Poppins,sans-serif; font-weight:800; margin-top:1.5rem; font-size:1.6rem'>🗺️ Localisation des ventes comparables</h2>",
             unsafe_allow_html=True)
         st.caption("Position légèrement floue pour respecter la vie privée des vendeurs.")
-        bien_point = pd.DataFrame([{
-            "lat": float(geo["lat"]), "lon": float(geo["lon"]),
-            "color": "#063970", "size": 120
-        }])
-        comp_points = pd.DataFrame([{
-            "lat": float(p["lat"]), "lon": float(p["lon"]),
-            "color": "#FF7E79", "size": 80
-        } for p in map_points])
-        df_map = pd.concat([bien_point, comp_points], ignore_index=True)
-        st.map(df_map, zoom=14, color="color", size="size")
+
+        # Layer comparables : saumon translucide
+        comp_data = [{"lat": float(p["lat"]), "lon": float(p["lon"])} for p in map_points]
+        layer_comp = pdk.Layer(
+            "ScatterplotLayer",
+            data=comp_data,
+            get_position=["lon", "lat"],
+            get_fill_color=[255, 126, 121, 160],
+            get_radius=60,
+            pickable=False)
+
+        # Layer bien estimé : point bleu plein petit et précis
+        bien_data = [{"lat": float(geo["lat"]), "lon": float(geo["lon"])}]
+        layer_bien = pdk.Layer(
+            "ScatterplotLayer",
+            data=bien_data,
+            get_position=["lon", "lat"],
+            get_fill_color=[6, 57, 112, 255],
+            get_line_color=[255, 255, 255, 255],
+            get_radius=25,
+            stroked=True,
+            line_width_min_pixels=2,
+            pickable=False)
+
+        view = pdk.ViewState(
+            latitude=float(geo["lat"]),
+            longitude=float(geo["lon"]),
+            zoom=14, pitch=0)
+
+        st.pydeck_chart(pdk.Deck(
+            layers=[layer_comp, layer_bien],
+            initial_view_state=view,
+            map_style="mapbox://styles/mapbox/light-v10"),
+            use_container_width=True)
+
         st.markdown(
             "<div style='display:flex; gap:1.5rem; margin-top:0.5rem; font-size:0.85rem; color:#64748b; font-family:Poppins,sans-serif'>"
             "<span><span style='display:inline-block;width:12px;height:12px;border-radius:50%;background:#063970;margin-right:5px;vertical-align:middle'></span>Votre bien</span>"
-            "<span><span style='display:inline-block;width:12px;height:12px;border-radius:50%;background:#FF7E79;margin-right:5px;vertical-align:middle'></span>Ventes comparables</span>"
+            "<span><span style='display:inline-block;width:12px;height:12px;border-radius:50%;background:#FF7E79;opacity:0.65;margin-right:5px;vertical-align:middle'></span>Ventes comparables</span>"
             "</div>", unsafe_allow_html=True)
 
     st.markdown(

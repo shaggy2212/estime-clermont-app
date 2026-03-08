@@ -561,9 +561,29 @@ hr {{
 }}
 
 /* ═══ PROGRESS BAR ═══════════════════════════════════════════════════ */
-[data-testid="stProgress"] > div > div {{
-    background: linear-gradient(90deg, {PRIMARY}, {ACCENT}) !important;
+/* Piste (fond) */
+[data-testid="stProgress"] > div {{
+    background: #e2e8f0 !important;
     border-radius: 999px !important;
+    height: 10px !important;
+}}
+/* Barre de progression */
+[data-testid="stProgress"] > div > div {{
+    background: {PRIMARY} !important;
+    border-radius: 999px !important;
+    height: 10px !important;
+    transition: width 0.4s ease !important;
+}}
+/* Texte au-dessus de la barre */
+[data-testid="stProgress"] + div,
+[data-testid="stProgress"] ~ div p,
+[data-testid="stProgressMessage"],
+[data-testid="stProgress"] p {{
+    color: {PRIMARY} !important;
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 0.88rem !important;
+    font-weight: 600 !important;
+    margin-bottom: 0.4rem !important;
 }}
 
 /* ═══ ALERTS ═════════════════════════════════════════════════════════ */
@@ -1014,7 +1034,7 @@ with colForm:
 
     # Adresse
     st.text_input("", placeholder="🏠  Adresse du bien — ex : 5 Rue de la République", key="addr_typed")
-    st.markdown("<div class='addr-helper'> App 100% locale — seules les adresses de Clermont-de-l'Oise et ses communes voisines sont disponibles.</div>",
+    st.markdown("<div class='addr-helper'>📍 App 100% locale — seules les adresses de Clermont-de-l'Oise et ses communes voisines sont disponibles.</div>",
                 unsafe_allow_html=True)
 
     typed = (st.session_state.addr_typed or "").strip()

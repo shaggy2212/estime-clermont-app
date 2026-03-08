@@ -349,6 +349,12 @@ p, li, span, label, div {{ color: #334155 !important; }}
     border-color: {ACCENT} !important;
 }}
 
+/* ═══ ALIGNEMENT COLONNES CARACTÉRISTIQUES ═══════════════════════════ */
+[data-testid="stSelectbox"] > div > div,
+[data-testid="stNumberInput"] > div {{
+    min-height: 58px !important;
+}}
+
 /* ═══ ESPACEMENT CHAMPS CONTACT ══════════════════════════════════════ */
 [data-testid="stTextInput"] {{
     margin-bottom: 0.6rem !important;

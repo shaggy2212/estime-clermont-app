@@ -1177,14 +1177,30 @@ with colForm:
         }
         attachObservers();
 
-        // Bloque le scroll zoom sur la carte Streamlit
+        // Bloque le scroll zoom sur la carte pydeck
         function blockMapScroll() {
             var root = window.parent.document;
-            root.querySelectorAll('[data-testid="stDeckGlJsonChart"] canvas, [class*="mapboxgl-canvas"]').forEach(function(el) {
-                el.addEventListener('wheel', function(e) { e.stopPropagation(); }, { passive: false });
+            var canvases = root.querySelectorAll('canvas');
+            canvases.forEach(function(el) {
+                el.addEventListener('wheel', function(e) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                }, { passive: false });
             });
+            // Observer pour les canvas ajoutés après coup
+            new MutationObserver(function() {
+                root.querySelectorAll('canvas').forEach(function(el) {
+                    if (!el._scrollBlocked) {
+                        el._scrollBlocked = true;
+                        el.addEventListener('wheel', function(e) {
+                            e.stopPropagation();
+                            e.preventDefault();
+                        }, { passive: false });
+                    }
+                });
+            }).observe(root.body, { childList: true, subtree: true });
         }
-        setTimeout(blockMapScroll, 2000);
+        setTimeout(blockMapScroll, 1000);
     })();
     </script>
     """, height=0)

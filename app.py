@@ -88,6 +88,15 @@ html, body, [class*="stApp"] {{
 }}
 section[data-testid="stSidebar"] {{ display: none !important; }}
 
+/* Cache les éléments Streamlit Cloud (fork, menu, toolbar) */
+#MainMenu {{ display: none !important; }}
+header[data-testid="stHeader"] {{ display: none !important; }}
+footer {{ display: none !important; }}
+[data-testid="stToolbar"] {{ display: none !important; }}
+[data-testid="stDecoration"] {{ display: none !important; }}
+[data-testid="stStatusWidget"] {{ display: none !important; }}
+.stDeployButton {{ display: none !important; }}
+
 /* ═══ TYPOGRAPHIE ═════════════════════════════════════════════════════ */
 h2 {{
     font-family: 'Poppins', sans-serif !important;

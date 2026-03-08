@@ -317,42 +317,9 @@ p, li, span, label, div {{ color: #334155 !important; }}
     overflow: visible !important;
 }}
 
-/* ═══ CHECKBOX ═══════════════════════════════════════════════════════ */
+/* ═══ CHECKBOX NATIVE — cachée, remplacée par toggle custom ══════════ */
 [data-testid="stCheckbox"] {{
-    background: #f8fafc;
-    border: 2px solid #e2e8f0;
-    border-radius: 16px;
-    padding: 0.8rem 1rem !important;
-    margin-top: 0.8rem;
-    transition: border-color 0.2s;
-    user-select: none !important;
-    -webkit-user-select: none !important;
-}}
-[data-testid="stCheckbox"]:hover {{
-    border-color: {ACCENT} !important;
-}}
-[data-testid="stCheckbox"] label,
-[data-testid="stCheckbox"] label *,
-[data-testid="stCheckbox"] label:hover,
-[data-testid="stCheckbox"] label:hover *,
-[data-testid="stCheckbox"] label:active,
-[data-testid="stCheckbox"] label:active *,
-[data-testid="stCheckbox"] label:focus,
-[data-testid="stCheckbox"] label:focus * {{
-    background: transparent !important;
-    background-color: transparent !important;
-    color: #64748b !important;
-    user-select: none !important;
-    -webkit-user-select: none !important;
-}}
-[data-testid="stCheckbox"] label p {{
-    font-size: 0.87rem !important;
-    line-height: 1.55 !important;
-    font-weight: 500 !important;
-}}
-[data-testid="stCheckbox"] input:checked + div {{
-    background: {ACCENT} !important;
-    border-color: {ACCENT} !important;
+    display: none !important;
 }}
 
 /* ═══ ESPACEMENT CHAMPS CONTACT ══════════════════════════════════════ */
@@ -1038,11 +1005,28 @@ with colForm:
     with cc2:
         st.text_input("", key="email", placeholder="✉️  Votre email")
 
-    st.checkbox(
-        "J'accepte de recevoir cette estimation par email et qu'Hakim me contacte pour l'affiner si besoin. "
-        "Pas de spam, pas de relance tous les matins. Promis 🙂",
-        key="consent",
-    )
+    # Toggle RGPD custom (remplace st.checkbox pour éviter le highlight natif Streamlit)
+    consent_val = st.session_state.get("consent", False)
+    checked_style = f"background:{ACCENT};border-color:{ACCENT};" if consent_val else "background:white;border-color:#e2e8f0;"
+    check_icon = "✓" if consent_val else ""
+    check_color = "color:white;" if consent_val else "color:transparent;"
+    st.markdown(f"""
+    <div class="consent-toggle" id="consent-box" onclick="
+        var cb = window.parent.document.querySelector('[data-testid=stCheckbox] input');
+        if(cb){{ cb.click(); }}
+    " style="cursor:pointer; background:#f8fafc; border:2px solid #e2e8f0; border-radius:16px; padding:0.85rem 1rem; margin-top:0.8rem; display:flex; align-items:flex-start; gap:0.85rem; user-select:none;">
+      <div style="flex-shrink:0; width:22px; height:22px; border-radius:6px; border:2px solid #e2e8f0; {checked_style} display:flex; align-items:center; justify-content:center; margin-top:1px; transition:all 0.15s;">
+        <span style="font-size:0.75rem; font-weight:900; {check_color}">{check_icon}</span>
+      </div>
+      <p style="margin:0; font-size:0.87rem; color:#64748b; line-height:1.55; font-weight:500; user-select:none;">
+        J'accepte de recevoir cette estimation par email et qu'Hakim me contacte pour l'affiner si besoin. Pas de spam, pas de relance tous les matins. Promis 🙂
+      </p>
+    </div>
+    """, unsafe_allow_html=True)
+    # Checkbox native cachée qui gère le vrai state
+    st.markdown("<div style='display:none'>", unsafe_allow_html=True)
+    st.checkbox("consent_hidden", key="consent", label_visibility="hidden")
+    st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
 

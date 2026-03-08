@@ -114,62 +114,61 @@ p, li, span, label, div {{ color: #334155 !important; }}
     box-shadow: 0 8px 32px rgba(255,126,121,0.30);
     position: relative; overflow: hidden;
 }}
-/* cercle déco blanc en arrière-plan */
 .info-card::before {{
     content: "";
     position: absolute; top: -60px; right: -60px;
     width: 200px; height: 200px;
     background: rgba(255,255,255,0.10);
-    border-radius: 50%;
-    pointer-events: none;
+    border-radius: 50%; pointer-events: none;
 }}
 .info-card::after {{
     content: "";
     position: absolute; bottom: -50px; left: -40px;
     width: 160px; height: 160px;
     background: rgba(255,255,255,0.07);
-    border-radius: 50%;
-    pointer-events: none;
+    border-radius: 50%; pointer-events: none;
 }}
 .info-card ul {{
-    list-style: none; padding: 0; margin: 0.8rem 0 0;
+    list-style: none; padding: 0; margin: 1rem 0 0;
 }}
 .info-card ul li {{
-    padding: 0.55rem 0;
-    font-size: 0.94rem !important;
-    color: rgba(255,255,255,0.92) !important;
-    display: flex; align-items: flex-start; gap: 0.75rem;
-    border-bottom: 1px solid rgba(255,255,255,0.15);
-    font-weight: 500 !important;
+    padding: 0.65rem 0;
+    font-size: 1rem !important;
+    color: white !important;
+    display: flex; align-items: flex-start; gap: 0.85rem;
+    border-bottom: 1px solid rgba(255,255,255,0.18);
+    font-weight: 600 !important;
+    line-height: 1.45;
 }}
 .info-card ul li:last-child {{ border-bottom: none; }}
 .info-card ul li .check {{
-    background: rgba(255,255,255,0.25);
+    background: rgba(255,255,255,0.28);
     color: white !important;
     font-weight: 900;
     flex-shrink: 0;
-    width: 22px; height: 22px;
+    width: 26px; height: 26px;
     border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: 0.75rem !important;
+    font-size: 0.85rem !important;
     margin-top: 1px;
 }}
 .info-note {{
-    background: rgba(255,255,255,0.15);
-    border-left: 4px solid rgba(255,255,255,0.5);
+    background: rgba(255,255,255,0.18);
+    border-left: 4px solid rgba(255,255,255,0.6);
     border-radius: 0 16px 16px 0;
-    padding: 0.9rem 1.1rem;
-    font-size: 0.88rem !important;
-    color: rgba(255,255,255,0.88) !important;
-    line-height: 1.6;
+    padding: 1rem 1.2rem;
+    font-size: 0.93rem !important;
+    color: white !important;
+    line-height: 1.65;
+    font-weight: 500 !important;
 }}
-.info-note b {{ color: white !important; font-weight: 700 !important; }}
+.info-note b, .info-note * {{ color: white !important; font-weight: 700 !important; }}
 
 /* ═══ FORM WRAPPER (colonne droite) ══════════════════════════════════ */
 .form-wrapper {{
     background: white;
     border-radius: 28px;
-    padding: 0.5rem 1.8rem 2rem;
+    padding: 0 1.8rem 2rem;
     box-shadow: 0 4px 24px rgba(6,57,112,0.08);
     position: relative;
     border: 1.5px solid #f1f5f9;
@@ -274,37 +273,44 @@ p, li, span, label, div {{ color: #334155 !important; }}
 }}
 
 /* ═══ SELECTBOX ══════════════════════════════════════════════════════ */
-[data-testid="stSelectbox"] > div > div,
-[data-testid="stSelectbox"] > div > div > div {{
+[data-testid="stSelectbox"] > div > div {{
     background: #f8fafc !important;
     border: 2px solid #e2e8f0 !important;
     border-radius: 16px !important;
     min-height: 54px !important;
-    color: #1e293b !important;
-    font-family: 'Poppins', sans-serif !important;
-    font-size: 0.97rem !important;
-    font-weight: 600 !important;
+    display: flex !important;
+    align-items: center !important;
 }}
 [data-testid="stSelectbox"] > div > div > div {{
+    background: transparent !important;
     border: none !important;
     min-height: unset !important;
+    padding: 0 0.3rem !important;
 }}
 [data-testid="stSelectbox"] > div > div:focus-within {{
     background: white !important;
     border-color: {ACCENT} !important;
     box-shadow: 0 0 0 4px rgba(255,126,121,0.12) !important;
 }}
-/* Texte sélectionné aligné */
 [data-testid="stSelectbox"] span {{
     color: #1e293b !important;
     font-family: 'Poppins', sans-serif !important;
     font-weight: 600 !important;
     font-size: 0.97rem !important;
-    line-height: 1.4 !important;
 }}
 [data-testid="stSelectbox"] svg {{ fill: #94a3b8 !important; }}
 
 [data-testid="InputInstructions"] {{ display: none !important; }}
+
+/* ═══ ANTI-CLIP — empêche Streamlit de couper les champs ═════════════ */
+[data-testid="stTextInput"],
+[data-testid="stSelectbox"],
+[data-testid="stNumberInput"],
+[data-testid="stCheckbox"],
+[data-testid="stTextInput"] > div,
+[data-testid="stSelectbox"] > div {{
+    overflow: visible !important;
+}}
 
 /* ═══ CHECKBOX ═══════════════════════════════════════════════════════ */
 [data-testid="stCheckbox"] {{
@@ -318,12 +324,20 @@ p, li, span, label, div {{ color: #334155 !important; }}
 [data-testid="stCheckbox"]:hover {{
     border-color: {ACCENT} !important;
 }}
+/* Texte du label uniquement, pas de highlight saumon */
 [data-testid="stCheckbox"] label p {{
     font-size: 0.87rem !important;
     color: #64748b !important;
     line-height: 1.55 !important;
-    font-weight: 600 !important;
+    font-weight: 500 !important;
+    background: transparent !important;
 }}
+[data-testid="stCheckbox"] label,
+[data-testid="stCheckbox"] label:hover,
+[data-testid="stCheckbox"] label:active {{
+    background: transparent !important;
+}}
+/* Seulement le carré cochable en saumon */
 [data-testid="stCheckbox"] input:checked + div {{
     background: {ACCENT} !important;
     border-color: {ACCENT} !important;
@@ -925,8 +939,8 @@ with colInfo:
 
 # ── Colonne Formulaire ───────────────────────────────────────────────
 with colForm:
-    st.markdown("## Parlez-moi de votre bien")
     st.markdown("<div class='form-wrapper'>", unsafe_allow_html=True)
+    st.markdown("<h2 style='font-family:Poppins,sans-serif;color:#063970;font-size:1.85rem;font-weight:800;margin:1.2rem 0 1.1rem;letter-spacing:-0.02em;line-height:1.15'>Parlez-moi de votre bien</h2>", unsafe_allow_html=True)
 
     # Commune
     st.markdown("<span class='section-pill'>📍 Localisation</span>", unsafe_allow_html=True)

@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import requests
 import time
+import pydeck as pdk
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 
@@ -1323,11 +1324,24 @@ if st.session_state.result_payload and st.session_state.geo:
     map_points = hp.get("map_points", [])
     if map_points:
         st.markdown(
-            f"<h3 style='color:{PRIMARY}; font-family:Poppins,sans-serif; font-weight:800; margin-top:1.5rem'>🗺️ Localisation des ventes comparables</h3>",
+            f"<h2 style='color:{PRIMARY}; font-family:Poppins,sans-serif; font-weight:800; margin-top:1.5rem; font-size:1.6rem'>🗺️ Localisation des ventes comparables</h2>",
             unsafe_allow_html=True)
         st.caption("Position légèrement floue pour respecter la vie privée des vendeurs.")
-        bien_point = pd.DataFrame([{"lat": float(geo["lat"]), "lon": float(geo["lon"])}])
-        st.map(pd.concat([bien_point, pd.DataFrame(map_points)], ignore_index=True), zoom=14)
+        all_pts = [{"lat": float(geo["lat"]), "lon": float(geo["lon"]), "color": [6,57,112,220], "radius": 18}]
+        for pt in map_points:
+            all_pts.append({"lat": float(pt["lat"]), "lon": float(pt["lon"]), "color": [255,126,121,200], "radius": 14})
+        deck = pdk.Deck(
+            map_style="mapbox://styles/mapbox/light-v10",
+            initial_view_state=pdk.ViewState(
+                latitude=float(geo["lat"]), longitude=float(geo["lon"]),
+                zoom=14, pitch=0),
+            layers=[pdk.Layer(
+                "ScatterplotLayer", data=all_pts,
+                get_position=["lon","lat"],
+                get_fill_color="color", get_radius="radius",
+                pickable=False)],
+            controller={"scrollZoom": False, "dragRotate": False})
+        st.pydeck_chart(deck, use_container_width=True)
 
     st.markdown(
         "<div class='result-card'>"

@@ -535,22 +535,25 @@ p, li, span, label, div {{ color: #334155 !important; }}
 /* ═══ BOUTON RDV ═════════════════════════════════════════════════════ */
 .booking-btn a {{
     display: block; text-align: center;
-    background: {PRIMARY};
+    background: {ACCENT};
     color: white !important;
     font-family: 'Poppins', sans-serif !important;
     font-weight: 900 !important;
-    font-size: 1rem !important;
-    border-radius: 18px;
-    padding: 1.1rem 1.5rem;
+    font-size: 1.25rem !important;
+    border-radius: 20px;
+    padding: 1.5rem 2rem;
+    min-height: 80px;
+    display: flex; align-items: center; justify-content: center;
     text-decoration: none !important;
-    box-shadow: 0 8px 28px rgba(6,57,112,0.22);
+    box-shadow: 0 10px 36px rgba(255,126,121,0.40);
     margin-top: 0.5rem;
     transition: all 0.22s cubic-bezier(.34,1.56,.64,1);
     letter-spacing: 0.01em;
 }}
 .booking-btn a:hover {{
-    transform: translateY(-2px) scale(1.01);
-    box-shadow: 0 14px 36px rgba(6,57,112,0.28);
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 18px 48px rgba(255,126,121,0.55);
+    background: #ff6b65;
 }}
 
 /* ═══ HR ═════════════════════════════════════════════════════════════ */

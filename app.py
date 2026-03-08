@@ -1344,6 +1344,13 @@ with colForm:
 # RÉSULTATS
 # ===========================
 if st.session_state.result_payload and st.session_state.geo:
+    # Signale à la page parente (Carrd) d'agrandir l'iframe
+    st.components.v1.html("""
+    <script>
+    try { window.parent.postMessage({ type: "icostim:resultsReady" }, "*"); } catch(e) {}
+    </script>
+    """, height=0)
+
     st.markdown("<hr/>", unsafe_allow_html=True)
     st.markdown("## ✨ Votre estimation")
 

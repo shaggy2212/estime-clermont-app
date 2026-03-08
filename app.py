@@ -560,32 +560,6 @@ hr {{
     margin: 1.5rem 0;
 }}
 
-/* ═══ PROGRESS BAR ═══════════════════════════════════════════════════ */
-/* Piste (fond) */
-[data-testid="stProgress"] > div {{
-    background: #e2e8f0 !important;
-    border-radius: 999px !important;
-    height: 10px !important;
-}}
-/* Barre de progression */
-[data-testid="stProgress"] > div > div {{
-    background: {PRIMARY} !important;
-    border-radius: 999px !important;
-    height: 10px !important;
-    transition: width 0.4s ease !important;
-}}
-/* Texte au-dessus de la barre */
-[data-testid="stProgress"] + div,
-[data-testid="stProgress"] ~ div p,
-[data-testid="stProgressMessage"],
-[data-testid="stProgress"] p {{
-    color: {PRIMARY} !important;
-    font-family: 'Poppins', sans-serif !important;
-    font-size: 0.88rem !important;
-    font-weight: 600 !important;
-    margin-bottom: 0.4rem !important;
-}}
-
 /* ═══ ALERTS ═════════════════════════════════════════════════════════ */
 [data-testid="stAlert"] {{
     background: #f0fdf4 !important;
@@ -1238,10 +1212,23 @@ with colForm:
         geo = {"lat": geo_data["lat"], "lon": geo_data["lon"], "label": geo_data.get("label", chosen)}
 
         t0       = time.time()
-        progress = st.progress(0, text="🔎 Analyse des ventes récentes autour de votre bien…")
+        prog_slot = st.empty()
+
+        def render_progress(pct: int, txt: str):
+            prog_slot.markdown(f"""
+<div style="margin: 1.2rem 0 0.5rem;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+        <span style="font-family:'Poppins',sans-serif; font-size:0.88rem; font-weight:600; color:#063970;">{txt}</span>
+        <span style="font-family:'Poppins',sans-serif; font-size:0.95rem; font-weight:800; color:#FF7E79;">{pct}%</span>
+    </div>
+    <div style="background:#f1f5f9; border-radius:999px; height:10px; overflow:hidden;">
+        <div style="width:{pct}%; background:#FF7E79; height:10px; border-radius:999px; transition:width 0.4s ease;"></div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
         def step(pct, txt, sleep=0.35):
-            progress.progress(pct, text=txt); time.sleep(sleep)
+            render_progress(pct, txt); time.sleep(sleep)
 
         try:
             step(10, "📦 Chargement des ventes officielles (DVF)…", 0.65)
@@ -1264,8 +1251,8 @@ with colForm:
 
             dt = time.time() - t0
             if dt < MIN_PROGRESS_SECONDS: time.sleep(MIN_PROGRESS_SECONDS - dt)
-            progress.progress(100, text="✅ Votre estimation est prête !")
-            time.sleep(0.3)
+            render_progress(100, "✅ Votre estimation est prête !")
+            time.sleep(0.4)
 
             st.session_state.geo            = geo
             st.session_state.result_payload = payload
@@ -1274,7 +1261,7 @@ with colForm:
                        area=effective_area, bien_type=str(st.session_state.bien_type),
                        surface=float(st.session_state.surface))
         finally:
-            progress.empty()
+            prog_slot.empty()
 
         st.success(f"Merci {st.session_state.prenom} ✅ Votre estimation est prête.")
         st.rerun()

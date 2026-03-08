@@ -239,10 +239,13 @@ p, li, span, label, div {{ color: #334155 !important; }}
     background: #f8fafc !important;
     border: 2px solid #e2e8f0 !important;
     border-radius: 16px !important;
-    padding: 0.1rem 0.3rem !important;
+    padding: 0 0.3rem !important;
+    min-height: 58px !important;
+    display: flex !important;
+    align-items: center !important;
 }}
 [data-testid="stNumberInput"] input {{
-    height: 50px !important;
+    height: 40px !important;
     background: transparent !important;
     border: none !important;
     border-radius: 16px !important;
@@ -265,11 +268,18 @@ p, li, span, label, div {{ color: #334155 !important; }}
     background: white !important;
     border: none !important;
     color: {PRIMARY} !important;
-    border-radius: 10px !important;
+    border-radius: 8px !important;
     font-weight: 900 !important;
-    font-size: 1.1rem !important;
+    font-size: 0.9rem !important;
     box-shadow: 0 1px 4px rgba(6,57,112,0.10) !important;
     margin: 4px !important;
+    width: 32px !important;
+    height: 32px !important;
+    flex-shrink: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
 }}
 [data-testid="stNumberInput"] button:hover {{
     background: {ACCENT} !important;

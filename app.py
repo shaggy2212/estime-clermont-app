@@ -707,7 +707,10 @@ def is_form_ready() -> Tuple[bool, int]:
 # ===========================
 # KIT
 # ===========================
-def add_to_kit(prenom: str, email: str, area: str, bien_type: str, surface: float) -> bool:
+def add_to_kit(prenom: str, email: str, area: str, bien_type: str, surface: float,
+               est_min: float = 0, est_max: float = 0, pm2: float = 0,
+               reliability: str = "", tension_label: str = "", tension_score: int = 0,
+               adresse: str = "") -> bool:
     try:
         api_key = st.secrets.get("KIT_API_KEY", "")
         form_id = st.secrets.get("KIT_FORM_ID", "")
@@ -717,8 +720,21 @@ def add_to_kit(prenom: str, email: str, area: str, bien_type: str, surface: floa
             return False
         url = f"https://api.convertkit.com/v3/forms/{form_id}/subscribe"
         payload = {
-            "api_key": api_key, "email": email, "first_name": prenom,
-            "fields": {"commune": area, "type_bien": bien_type, "surface": str(int(surface)), "source": "EstimeClermont"},
+            "api_key": api_key,
+            "email": email,
+            "first_name": prenom,
+            "fields": {
+                "commune":          area,
+                "type_bien":        bien_type,
+                "surface":          str(int(surface)),
+                "source":           "EstimeClermont",
+                "adresse":          adresse,
+                "estimation_min":   str(int(est_min)),
+                "estimation_max":   str(int(est_max)),
+                "prix_m2":          str(int(pm2)),
+                "fiabilite":        reliability,
+                "attractivite":     f"{tension_label} ({tension_score}/100)",
+            },
         }
         r = requests.post(url, json=payload, timeout=10)
         st.session_state["_kit_result"]   = r.status_code in (200, 201)
@@ -1303,9 +1319,20 @@ with colForm:
             st.session_state.geo            = geo
             st.session_state.result_payload = payload
 
-            add_to_kit(prenom=st.session_state.prenom, email=st.session_state.email,
-                       area=effective_area, bien_type=str(st.session_state.bien_type),
-                       surface=float(st.session_state.surface))
+            add_to_kit(
+                prenom=st.session_state.prenom,
+                email=st.session_state.email,
+                area=effective_area,
+                bien_type=str(st.session_state.bien_type),
+                surface=float(st.session_state.surface),
+                est_min=float(payload.get("est_min", 0)),
+                est_max=float(payload.get("est_max", 0)),
+                pm2=float(payload.get("pm2_med", 0)),
+                reliability=str(payload.get("reliability", "")),
+                tension_label=str(payload.get("tension", {}).get("label", "")),
+                tension_score=int(payload.get("tension", {}).get("score", 0)),
+                adresse=str(geo.get("label", ""))
+            )
         finally:
             prog_slot.empty()
 

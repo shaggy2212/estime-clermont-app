@@ -92,10 +92,17 @@ section[data-testid="stSidebar"] {{ display: none !important; }}
 #MainMenu {{ display: none !important; }}
 header[data-testid="stHeader"] {{ display: none !important; }}
 footer {{ display: none !important; }}
+footer[data-testid="stFooter"] {{ display: none !important; }}
 [data-testid="stToolbar"] {{ display: none !important; }}
 [data-testid="stDecoration"] {{ display: none !important; }}
 [data-testid="stStatusWidget"] {{ display: none !important; }}
+[data-testid="stBottom"] {{ display: none !important; }}
 .stDeployButton {{ display: none !important; }}
+.viewerBadge_container__r5tak {{ display: none !important; }}
+.viewerBadge_link__qRIco {{ display: none !important; }}
+/* Sélecteurs génériques pour les badges et branding */
+a[href*="streamlit.io"] {{ display: none !important; }}
+a[href*="streamlit.app/cloud"] {{ display: none !important; }}
 
 /* ═══ TYPOGRAPHIE ═════════════════════════════════════════════════════ */
 h2 {{
@@ -1188,6 +1195,35 @@ with colForm:
             }).observe(root, { childList: true, subtree: true });
         }
         watchInputInstructions();
+
+        // Observer dédié pour tuer le footer Streamlit Cloud (badge, pub, "created by")
+        function killStreamlitBranding() {
+            var doc = window.parent.document;
+            if (!doc || !doc.body) { setTimeout(killStreamlitBranding, 300); return; }
+            function nuke() {
+                // Footer entier
+                doc.querySelectorAll('footer, [data-testid="stBottom"], [data-testid="stFooter"]').forEach(function(el) {
+                    el.style.setProperty('display', 'none', 'important');
+                });
+                // Badge "Created by" et liens Streamlit
+                doc.querySelectorAll('a[href*="streamlit.io"], a[href*="streamlit.app/cloud"], .viewerBadge_container__r5tak, .viewerBadge_link__qRIco').forEach(function(el) {
+                    el.style.setProperty('display', 'none', 'important');
+                });
+                // Tout élément contenant "Streamlit" ou "shaggy" dans le texte visible
+                doc.querySelectorAll('span, p, div, a').forEach(function(el) {
+                    if (el.children.length === 0 && el.innerText && (
+                        el.innerText.toLowerCase().includes('streamlit') ||
+                        el.innerText.toLowerCase().includes('hosted with')
+                    )) {
+                        var parent = el.closest('[data-testid]') || el.parentElement;
+                        if (parent) parent.style.setProperty('display', 'none', 'important');
+                    }
+                });
+            }
+            nuke();
+            new MutationObserver(nuke).observe(doc.body, { childList: true, subtree: true });
+        }
+        killStreamlitBranding();
         function attachObservers() {
             var root = window.parent.document;
             var checkboxes = root.querySelectorAll('[data-baseweb="checkbox"]');

@@ -335,20 +335,15 @@ p, li, span, label, div {{ color: #334155 !important; }}
     line-height: 1.55 !important;
     font-weight: 500 !important;
 }}
-/* Tue le highlight saumon natif Streamlit/BaseWeb sur le label */
+/* Supprime TOUT fond sur le label et ses enfants, dans tous les états */
 [data-baseweb="checkbox"] > div:last-child,
-[data-baseweb="checkbox"][aria-checked="true"] > div:last-child,
-[data-baseweb="checkbox"][aria-checked="mixed"] > div:last-child {{
-    background-color: transparent !important;
+[data-baseweb="checkbox"] > div:last-child *,
+[data-baseweb="checkbox"] label,
+[data-baseweb="checkbox"] label * {{
     background: transparent !important;
-}}
-[data-baseweb="checkbox"]:hover > div:last-child,
-[data-baseweb="checkbox"]:active > div:last-child,
-[data-baseweb="checkbox"]:focus-within > div:last-child {{
     background-color: transparent !important;
-    background: transparent !important;
 }}
-/* Carré cochable en saumon */
+/* Carré cochable uniquement */
 [data-testid="stCheckbox"] input:checked + div {{
     background: {ACCENT} !important;
     border-color: {ACCENT} !important;

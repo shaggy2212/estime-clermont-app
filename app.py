@@ -20,9 +20,6 @@ PRIMARY  = "#063970"
 ACCENT   = "#FF7E79"
 GOLD     = "#C9A96E"
 SOFT     = "#EAF2FF"
-DARK     = "#071E38"
-DARK2    = "#0B2847"
-DARK3    = "#0F3356"
 
 MIN_PROGRESS_SECONDS = 5.2
 GARE_LON = 2.41767
@@ -70,421 +67,474 @@ except Exception:
     DEBUG = False
 
 # ===========================
-# CSS — Design premium sombre
+# CSS — Design ludique clair
 # ===========================
 st.markdown(f"""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Syne:wght@700;800&display=swap');
 
 /* ═══ RESET & BASE ═══════════════════════════════════════════════════ */
 html, body, [class*="stApp"] {{
-    font-family: 'DM Sans', sans-serif !important;
+    font-family: 'Nunito', sans-serif !important;
     font-size: 15px !important;
-    background: {DARK} !important;
-    color: #e2e8f0 !important;
+    background: #f5f7ff !important;
+    color: #1e293b !important;
 }}
 .main .block-container {{
-    background: {DARK} !important;
+    background: #f5f7ff !important;
     padding-top: 1.5rem !important;
     max-width: 1280px !important;
 }}
 section[data-testid="stSidebar"] {{ display: none !important; }}
 
+/* ═══ FORMES DÉCORATIVES ═════════════════════════════════════════════ */
+.main .block-container {{ position: relative; }}
+.main .block-container::before {{
+    content: "";
+    position: fixed; top: -120px; right: -120px;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(255,126,121,0.18) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none; z-index: 0;
+}}
+.main .block-container::after {{
+    content: "";
+    position: fixed; bottom: -100px; left: -100px;
+    width: 350px; height: 350px;
+    background: radial-gradient(circle, rgba(6,57,112,0.12) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none; z-index: 0;
+}}
+
 /* ═══ TYPOGRAPHIE ═════════════════════════════════════════════════════ */
 h2 {{
-    font-family: 'Playfair Display', serif !important;
-    color: #f1f5f9 !important;
-    font-size: 1.9rem !important;
-    font-weight: 700 !important;
+    font-family: 'Syne', sans-serif !important;
+    color: {PRIMARY} !important;
+    font-size: 1.85rem !important;
+    font-weight: 800 !important;
     letter-spacing: -0.02em !important;
-    margin-bottom: 1.1rem !important;
-    line-height: 1.2 !important;
+    margin-bottom: 1rem !important;
+    line-height: 1.15 !important;
 }}
 h3 {{
-    font-family: 'DM Sans', sans-serif !important;
-    color: #cbd5e1 !important;
-    font-size: 1.05rem !important;
-    font-weight: 600 !important;
+    font-family: 'Nunito', sans-serif !important;
+    color: #334155 !important;
+    font-size: 1rem !important;
+    font-weight: 800 !important;
 }}
-p, li, span, label, div {{ color: #cbd5e1 !important; }}
+p, li, span, label, div {{ color: #334155 !important; }}
 
-/* ═══ CARDS INFO (colonne gauche) ════════════════════════════════════ */
+/* ═══ CARD INFO (colonne gauche) ═════════════════════════════════════ */
 .info-card {{
-    background: linear-gradient(145deg, {DARK2} 0%, {DARK3} 100%);
-    border: 1px solid rgba(201,169,110,0.18);
-    border-radius: 20px;
+    background: white;
+    border-radius: 24px;
     padding: 1.6rem 1.5rem;
     margin-bottom: 1rem;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.35);
-    position: relative;
-    overflow: hidden;
+    box-shadow: 0 4px 24px rgba(6,57,112,0.08);
+    position: relative; overflow: hidden;
 }}
 .info-card::before {{
     content: "";
-    position: absolute; top: 0; left: 0; right: 0; height: 3px;
-    background: linear-gradient(90deg, {GOLD}, {ACCENT});
+    position: absolute; top: 0; left: 0; right: 0; height: 4px;
+    background: linear-gradient(90deg, {PRIMARY}, {ACCENT});
+    border-radius: 24px 24px 0 0;
+}}
+/* blob déco dans la card */
+.info-card::after {{
+    content: "";
+    position: absolute; bottom: -50px; right: -50px;
+    width: 160px; height: 160px;
+    background: radial-gradient(circle, rgba(255,126,121,0.10) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
 }}
 .info-card ul {{
-    list-style: none; padding: 0; margin: 0.5rem 0 0 0;
+    list-style: none; padding: 0; margin: 0.6rem 0 0;
 }}
 .info-card ul li {{
-    padding: 0.42rem 0;
+    padding: 0.5rem 0;
     font-size: 0.94rem !important;
-    color: #94a3b8 !important;
-    display: flex; align-items: flex-start; gap: 0.6rem;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: #475569 !important;
+    display: flex; align-items: flex-start; gap: 0.7rem;
+    border-bottom: 1px solid #f1f5f9;
 }}
 .info-card ul li:last-child {{ border-bottom: none; }}
 .info-card ul li .check {{
-    color: {GOLD} !important;
-    font-weight: 800; flex-shrink: 0; margin-top: 1px;
+    color: {ACCENT} !important;
+    font-weight: 900; flex-shrink: 0; margin-top: 1px;
+    font-size: 1rem !important;
 }}
 .info-note {{
-    background: rgba(0,77,127,0.18);
-    border-left: 3px solid {GOLD};
-    border-radius: 0 12px 12px 0;
+    background: #eff6ff;
+    border-left: 4px solid {PRIMARY};
+    border-radius: 0 16px 16px 0;
     padding: 0.9rem 1.1rem;
     font-size: 0.88rem !important;
-    color: #94a3b8 !important;
-    line-height: 1.55;
+    color: #475569 !important;
+    line-height: 1.6;
 }}
 
-/* ═══ FORM CARD (colonne droite) ════════════════════════════════════ */
+/* ═══ FORM WRAPPER (colonne droite) ══════════════════════════════════ */
 .form-wrapper {{
-    background: linear-gradient(145deg, {DARK2} 0%, {DARK3} 100%);
-    border: 1px solid rgba(255,255,255,0.07);
-    border-radius: 24px;
+    background: white;
+    border-radius: 28px;
     padding: 2rem 1.8rem 1.8rem;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-    position: relative;
-    overflow: hidden;
+    box-shadow: 0 8px 40px rgba(6,57,112,0.10);
+    position: relative; overflow: hidden;
 }}
+/* blob déco coin sup droit */
+.form-wrapper::before {{
+    content: "";
+    position: absolute; top: -70px; right: -70px;
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(255,126,121,0.13) 0%, transparent 70%);
+    border-radius: 50%; pointer-events: none;
+}}
+/* blob déco coin inf gauche */
 .form-wrapper::after {{
     content: "";
-    position: absolute; bottom: -80px; right: -80px;
-    width: 220px; height: 220px;
-    background: radial-gradient(circle, rgba(255,126,121,0.07) 0%, transparent 70%);
-    pointer-events: none;
+    position: absolute; bottom: -60px; left: -60px;
+    width: 180px; height: 180px;
+    background: radial-gradient(circle, rgba(6,57,112,0.09) 0%, transparent 70%);
+    border-radius: 50%; pointer-events: none;
 }}
 
-/* ═══ SECTION LABELS ════════════════════════════════════════════════ */
+/* ═══ SECTION PILLS ══════════════════════════════════════════════════ */
 .section-pill {{
     display: inline-flex; align-items: center; gap: 0.45rem;
-    background: rgba(201,169,110,0.12);
-    border: 1px solid rgba(201,169,110,0.25);
+    background: #eff6ff;
+    border: 2px solid rgba(6,57,112,0.15);
     border-radius: 999px;
-    padding: 0.3rem 0.85rem;
+    padding: 0.32rem 0.9rem;
     font-size: 0.75rem !important;
-    font-weight: 700 !important;
+    font-weight: 800 !important;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: {GOLD} !important;
-    margin-bottom: 0.9rem;
+    letter-spacing: 0.09em;
+    color: {PRIMARY} !important;
+    margin-bottom: 0.8rem;
 }}
 
-/* ═══ INPUTS & SELECTS ══════════════════════════════════════════════ */
-/* Labels */
+/* ═══ LABELS ═════════════════════════════════════════════════════════ */
 [data-testid="stTextInput"] label,
 [data-testid="stNumberInput"] label,
 [data-testid="stSelectbox"] label {{
-    font-size: 0.82rem !important;
-    font-weight: 600 !important;
-    color: #64748b !important;
+    font-size: 0.80rem !important;
+    font-weight: 800 !important;
+    color: #94a3b8 !important;
     text-transform: uppercase !important;
     letter-spacing: 0.07em !important;
-    margin-bottom: 0.3rem !important;
+    margin-bottom: 0.25rem !important;
 }}
 
-/* Input text */
+/* ═══ INPUT TEXT ═════════════════════════════════════════════════════ */
 [data-testid="stTextInput"] input {{
-    height: 52px !important;
-    background: rgba(255,255,255,0.04) !important;
-    border: 1.5px solid rgba(255,255,255,0.10) !important;
-    border-radius: 12px !important;
-    color: #f1f5f9 !important;
+    height: 54px !important;
+    background: #f1f5f9 !important;
+    border: 2px solid transparent !important;
+    border-radius: 16px !important;
+    color: #1e293b !important;
+    font-family: 'Nunito', sans-serif !important;
     font-size: 0.97rem !important;
-    padding: 0 1rem !important;
+    font-weight: 600 !important;
+    padding: 0 1.1rem !important;
     transition: border-color 0.2s, box-shadow 0.2s, background 0.2s !important;
-    caret-color: {GOLD} !important;
+    caret-color: {ACCENT} !important;
 }}
 [data-testid="stTextInput"] input:focus {{
-    background: rgba(255,255,255,0.07) !important;
-    border-color: {GOLD} !important;
-    box-shadow: 0 0 0 3px rgba(201,169,110,0.15) !important;
+    background: white !important;
+    border-color: {ACCENT} !important;
+    box-shadow: 0 0 0 4px rgba(255,126,121,0.12) !important;
     outline: none !important;
 }}
 [data-testid="stTextInput"] input::placeholder {{
-    color: #475569 !important;
+    color: #94a3b8 !important;
     font-style: italic;
+    font-weight: 400 !important;
 }}
 
-/* Number input */
+/* ═══ NUMBER INPUT ═══════════════════════════════════════════════════ */
 [data-testid="stNumberInput"] input {{
-    height: 52px !important;
-    background: rgba(255,255,255,0.04) !important;
-    border: 1.5px solid rgba(255,255,255,0.10) !important;
-    border-radius: 12px !important;
-    color: #f1f5f9 !important;
+    height: 54px !important;
+    background: #f1f5f9 !important;
+    border: 2px solid transparent !important;
+    border-radius: 16px !important;
+    color: #1e293b !important;
+    font-family: 'Nunito', sans-serif !important;
     font-size: 0.97rem !important;
-    padding: 0 1rem !important;
-    transition: border-color 0.2s, box-shadow 0.2s !important;
-    caret-color: {GOLD} !important;
+    font-weight: 700 !important;
+    padding: 0 0.8rem !important;
     text-align: center !important;
+    transition: border-color 0.2s, background 0.2s !important;
+    caret-color: {ACCENT} !important;
 }}
 [data-testid="stNumberInput"] input:focus {{
-    background: rgba(255,255,255,0.07) !important;
-    border-color: {GOLD} !important;
-    box-shadow: 0 0 0 3px rgba(201,169,110,0.15) !important;
+    background: white !important;
+    border-color: {ACCENT} !important;
+    box-shadow: 0 0 0 4px rgba(255,126,121,0.12) !important;
     outline: none !important;
 }}
-/* Boutons +/- number input */
 [data-testid="stNumberInput"] button {{
-    background: rgba(255,255,255,0.06) !important;
-    border: 1px solid rgba(255,255,255,0.1) !important;
-    color: #94a3b8 !important;
-    border-radius: 8px !important;
+    background: #f1f5f9 !important;
+    border: none !important;
+    color: #64748b !important;
+    border-radius: 10px !important;
+    font-weight: 800 !important;
 }}
 [data-testid="stNumberInput"] button:hover {{
-    background: rgba(201,169,110,0.15) !important;
-    border-color: {GOLD} !important;
-    color: {GOLD} !important;
+    background: rgba(255,126,121,0.12) !important;
+    color: {ACCENT} !important;
 }}
 
-/* Selectbox */
+/* ═══ SELECTBOX ══════════════════════════════════════════════════════ */
 [data-testid="stSelectbox"] > div > div {{
-    background: rgba(255,255,255,0.04) !important;
-    border: 1.5px solid rgba(255,255,255,0.10) !important;
-    border-radius: 12px !important;
-    min-height: 52px !important;
-    color: #f1f5f9 !important;
+    background: #f1f5f9 !important;
+    border: 2px solid transparent !important;
+    border-radius: 16px !important;
+    min-height: 54px !important;
+    color: #1e293b !important;
+    font-family: 'Nunito', sans-serif !important;
     font-size: 0.97rem !important;
+    font-weight: 600 !important;
 }}
 [data-testid="stSelectbox"] > div > div:focus-within {{
-    border-color: {GOLD} !important;
-    box-shadow: 0 0 0 3px rgba(201,169,110,0.15) !important;
+    background: white !important;
+    border-color: {ACCENT} !important;
+    box-shadow: 0 0 0 4px rgba(255,126,121,0.12) !important;
 }}
-[data-testid="stSelectbox"] svg {{ fill: #64748b !important; }}
+[data-testid="stSelectbox"] svg {{ fill: #94a3b8 !important; }}
 
-/* Masque "Press Enter" */
 [data-testid="InputInstructions"] {{ display: none !important; }}
 
-/* ═══ CHECKBOX ══════════════════════════════════════════════════════ */
+/* ═══ CHECKBOX ═══════════════════════════════════════════════════════ */
 [data-testid="stCheckbox"] {{
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.07);
-    border-radius: 12px;
-    padding: 0.75rem 1rem !important;
-    margin-top: 0.3rem;
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 0.8rem 1rem !important;
+    margin-top: 0.2rem;
+    transition: border-color 0.2s;
+}}
+[data-testid="stCheckbox"]:hover {{
+    border-color: {ACCENT} !important;
 }}
 [data-testid="stCheckbox"] label p {{
-    font-size: 0.88rem !important;
+    font-size: 0.87rem !important;
     color: #64748b !important;
-    line-height: 1.5 !important;
+    line-height: 1.55 !important;
+    font-weight: 600 !important;
 }}
 [data-testid="stCheckbox"] input:checked + div {{
-    background: {GOLD} !important;
-    border-color: {GOLD} !important;
+    background: {ACCENT} !important;
+    border-color: {ACCENT} !important;
 }}
 
-/* ═══ BOUTON CTA ════════════════════════════════════════════════════ */
+/* ═══ CTA BUTTON ═════════════════════════════════════════════════════ */
 .stButton > button {{
     width: 100% !important;
-    min-height: 60px !important;
-    background: linear-gradient(135deg, {ACCENT} 0%, #e8504a 50%, #c43d38 100%) !important;
+    min-height: 62px !important;
+    background: {ACCENT} !important;
     color: white !important;
     border: none !important;
-    border-radius: 14px !important;
-    font-family: 'DM Sans', sans-serif !important;
-    font-size: 1.05rem !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.03em !important;
-    box-shadow: 0 8px 24px rgba(255,126,121,0.30), 0 2px 8px rgba(0,0,0,0.3) !important;
-    transition: all 0.2s ease !important;
-    position: relative !important;
-    overflow: hidden !important;
-}}
-.stButton > button::before {{
-    content: "";
-    position: absolute; inset: 0;
-    background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, transparent 60%);
-    pointer-events: none;
+    border-radius: 18px !important;
+    font-family: 'Nunito', sans-serif !important;
+    font-size: 1.08rem !important;
+    font-weight: 900 !important;
+    letter-spacing: 0.02em !important;
+    box-shadow: 0 8px 28px rgba(255,126,121,0.35) !important;
+    transition: all 0.22s cubic-bezier(.34,1.56,.64,1) !important;
 }}
 .stButton > button *,
 .stButton > button span,
 .stButton > button p,
 .stButton > button div {{
-    font-size: 1.05rem !important;
-    font-weight: 700 !important;
+    font-size: 1.08rem !important;
+    font-weight: 900 !important;
     color: white !important;
 }}
 .stButton > button:hover:not(:disabled) {{
-    transform: translateY(-2px) !important;
-    box-shadow: 0 14px 32px rgba(255,126,121,0.40), 0 4px 12px rgba(0,0,0,0.35) !important;
+    transform: translateY(-3px) scale(1.01) !important;
+    box-shadow: 0 14px 36px rgba(255,126,121,0.42) !important;
 }}
 .stButton > button:disabled {{
-    background: rgba(255,255,255,0.06) !important;
+    background: #e2e8f0 !important;
     box-shadow: none !important;
     transform: none !important;
-    cursor: not-allowed !important;
 }}
 .stButton > button:disabled * {{
-    color: #475569 !important;
+    color: #94a3b8 !important;
 }}
 
-/* ═══ SÉPARATEUR ════════════════════════════════════════════════════ */
+/* ═══ SÉPARATEUR ═════════════════════════════════════════════════════ */
 .form-sep {{
     border: none;
-    border-top: 1px solid rgba(255,255,255,0.06);
-    margin: 1.3rem 0 1.1rem;
+    border-top: 2px dashed #f1f5f9;
+    margin: 1.3rem 0 1rem;
 }}
 
-/* ═══ HELPER ADRESSE ════════════════════════════════════════════════ */
+/* ═══ HELPER ADRESSE ═════════════════════════════════════════════════ */
 .addr-helper {{
     font-size: 0.82rem !important;
-    color: #475569 !important;
-    margin-top: -0.2rem;
-    margin-bottom: 0.7rem;
+    color: #94a3b8 !important;
+    margin-top: -0.15rem;
+    margin-bottom: 0.65rem;
     font-style: italic;
-}}
-
-/* ═══ STATUT FORMULAIRE ═════════════════════════════════════════════ */
-.form-status {{
-    text-align: center;
-    font-size: 0.85rem !important;
-    color: #475569 !important;
-    margin-top: 0.6rem;
-    padding: 0.5rem;
-}}
-.form-status.ready {{
-    color: #4ade80 !important;
     font-weight: 600 !important;
 }}
 
-/* ═══ MÉTRIQUES RÉSULTATS ═══════════════════════════════════════════ */
+/* ═══ STATUT FORMULAIRE ══════════════════════════════════════════════ */
+.form-status {{
+    text-align: center;
+    font-size: 0.86rem !important;
+    color: #94a3b8 !important;
+    font-weight: 700 !important;
+    margin-top: 0.5rem;
+    padding: 0.4rem;
+}}
+.form-status.ready {{
+    color: #22c55e !important;
+}}
+
+/* ═══ MÉTRIQUES RÉSULTATS ════════════════════════════════════════════ */
 .result-metric {{
-    background: linear-gradient(145deg, {DARK2}, {DARK3});
-    border: 1px solid rgba(201,169,110,0.20);
-    border-radius: 18px;
+    background: white;
+    border-radius: 20px;
     padding: 1.3rem 1.2rem;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    box-shadow: 0 4px 20px rgba(6,57,112,0.08);
     position: relative; overflow: hidden;
     margin-bottom: 0.8rem;
 }}
 .result-metric::before {{
     content: ""; position: absolute;
-    top: 0; left: 0; right: 0; height: 2px;
-    background: linear-gradient(90deg, {GOLD}, {ACCENT});
+    top: 0; left: 0; right: 0; height: 4px;
+    background: linear-gradient(90deg, {PRIMARY}, {ACCENT});
+    border-radius: 20px 20px 0 0;
 }}
-.result-metric .mk {{ font-size: 0.78rem !important; color: #64748b !important; text-transform: uppercase; letter-spacing: 0.08em; margin: 0; }}
-.result-metric .mv {{ font-size: 1.45rem !important; font-weight: 800 !important; color: #f1f5f9 !important; margin: 0.2rem 0 0; letter-spacing: -0.02em; }}
+.result-metric .mk {{
+    font-size: 0.75rem !important; color: #94a3b8 !important;
+    text-transform: uppercase; letter-spacing: 0.09em;
+    margin: 0; font-weight: 800 !important;
+}}
+.result-metric .mv {{
+    font-size: 1.4rem !important; font-weight: 900 !important;
+    color: {PRIMARY} !important; margin: 0.25rem 0 0;
+    letter-spacing: -0.02em;
+}}
 
-/* ═══ CARD RÉSULTATS ════════════════════════════════════════════════ */
+/* ═══ CARD RÉSULTATS ═════════════════════════════════════════════════ */
 .result-card {{
-    background: linear-gradient(145deg, {DARK2}, {DARK3});
-    border: 1px solid rgba(255,255,255,0.07);
-    border-radius: 16px;
+    background: white;
+    border-radius: 18px;
     padding: 1.2rem 1.3rem;
     margin-bottom: 0.8rem;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+    box-shadow: 0 4px 16px rgba(6,57,112,0.07);
+    border-left: 4px solid {PRIMARY};
 }}
-.result-card b {{ color: #94a3b8 !important; }}
+.result-card b {{ color: #334155 !important; font-weight: 800 !important; }}
 
-/* ═══ TENSION BOX ═══════════════════════════════════════════════════ */
+/* ═══ TENSION BOX ════════════════════════════════════════════════════ */
 .tension-box {{
-    background: rgba(255,126,121,0.07);
-    border-left: 3px solid {ACCENT};
-    border-radius: 0 12px 12px 0;
-    padding: 0.9rem 1.1rem;
+    background: #fff7f7;
+    border-left: 4px solid {ACCENT};
+    border-radius: 0 18px 18px 0;
+    padding: 1rem 1.2rem;
     margin: 0.8rem 0;
     font-size: 0.94rem !important;
-    line-height: 1.6;
-    color: #cbd5e1 !important;
+    line-height: 1.65;
+    color: #334155 !important;
 }}
 
-/* ═══ DISCLAIMER LIST ═══════════════════════════════════════════════ */
+/* ═══ DISCLAIMER LIST ════════════════════════════════════════════════ */
 .disclaimer-list {{
     list-style: none; padding: 0; margin: 0.7rem 0 1rem;
 }}
 .disclaimer-list li {{
-    padding: 0.3rem 0;
+    padding: 0.32rem 0;
     font-size: 0.93rem !important;
     color: #64748b !important;
     display: flex; align-items: flex-start; gap: 0.55rem;
+    font-weight: 600 !important;
 }}
 .disclaimer-list li::before {{
     content: "→";
     color: {ACCENT} !important;
-    font-weight: 800; flex-shrink: 0;
+    font-weight: 900; flex-shrink: 0;
 }}
 
-/* ═══ BOUTON RDV ════════════════════════════════════════════════════ */
+/* ═══ BOUTON RDV ═════════════════════════════════════════════════════ */
 .booking-btn a {{
     display: block; text-align: center;
-    background: linear-gradient(135deg, {GOLD} 0%, #a8833d 100%);
-    color: {DARK} !important;
-    font-family: 'DM Sans', sans-serif !important;
-    font-weight: 800 !important;
+    background: {PRIMARY};
+    color: white !important;
+    font-family: 'Nunito', sans-serif !important;
+    font-weight: 900 !important;
     font-size: 1rem !important;
-    border-radius: 14px;
+    border-radius: 18px;
     padding: 1.1rem 1.5rem;
     text-decoration: none !important;
-    box-shadow: 0 8px 24px rgba(201,169,110,0.25);
+    box-shadow: 0 8px 28px rgba(6,57,112,0.22);
     margin-top: 0.5rem;
-    transition: all 0.2s ease;
-    letter-spacing: 0.02em;
+    transition: all 0.22s cubic-bezier(.34,1.56,.64,1);
+    letter-spacing: 0.01em;
 }}
-.booking-btn a:hover {{ opacity: 0.9; transform: translateY(-1px); }}
+.booking-btn a:hover {{
+    transform: translateY(-2px) scale(1.01);
+    box-shadow: 0 14px 36px rgba(6,57,112,0.28);
+}}
 
-/* ═══ HR ════════════════════════════════════════════════════════════ */
+/* ═══ HR ═════════════════════════════════════════════════════════════ */
 hr {{
     border: none;
-    border-top: 1px solid rgba(255,255,255,0.06);
+    border-top: 2px dashed #e2e8f0;
     margin: 1.5rem 0;
 }}
 
-/* ═══ PROGRESS BAR ══════════════════════════════════════════════════ */
+/* ═══ PROGRESS BAR ═══════════════════════════════════════════════════ */
 [data-testid="stProgress"] > div > div {{
-    background: linear-gradient(90deg, {GOLD}, {ACCENT}) !important;
+    background: linear-gradient(90deg, {PRIMARY}, {ACCENT}) !important;
     border-radius: 999px !important;
 }}
 
-/* ═══ SUCCESS / ERROR MESSAGES ══════════════════════════════════════ */
+/* ═══ ALERTS ═════════════════════════════════════════════════════════ */
 [data-testid="stAlert"] {{
-    background: rgba(74,222,128,0.08) !important;
-    border: 1px solid rgba(74,222,128,0.2) !important;
-    border-radius: 12px !important;
-    color: #4ade80 !important;
+    background: #f0fdf4 !important;
+    border: 2px solid #bbf7d0 !important;
+    border-radius: 16px !important;
+    color: #16a34a !important;
 }}
 
-/* ═══ EXPANDER ══════════════════════════════════════════════════════ */
+/* ═══ EXPANDER ═══════════════════════════════════════════════════════ */
 [data-testid="stExpander"] {{
-    background: rgba(255,255,255,0.02) !important;
-    border: 1px solid rgba(255,255,255,0.06) !important;
-    border-radius: 12px !important;
+    background: white !important;
+    border: 2px solid #f1f5f9 !important;
+    border-radius: 16px !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.04) !important;
 }}
 [data-testid="stExpander"] summary {{
     color: #64748b !important;
     font-size: 0.88rem !important;
+    font-weight: 700 !important;
 }}
 
-/* ═══ MAP ═══════════════════════════════════════════════════════════ */
+/* ═══ MAP ════════════════════════════════════════════════════════════ */
 [data-testid="stDeckGlJsonChart"], iframe {{
-    border-radius: 16px !important;
+    border-radius: 20px !important;
     overflow: hidden;
-    border: 1px solid rgba(255,255,255,0.07) !important;
+    border: 2px solid #f1f5f9 !important;
+    box-shadow: 0 4px 16px rgba(6,57,112,0.07) !important;
 }}
 
-/* ═══ CAPTIONS ══════════════════════════════════════════════════════ */
+/* ═══ CAPTIONS ═══════════════════════════════════════════════════════ */
 [data-testid="stCaptionContainer"] p {{
-    color: #475569 !important;
+    color: #94a3b8 !important;
     font-size: 0.82rem !important;
+    font-weight: 600 !important;
 }}
 
-/* ═══ SCROLLBAR ═════════════════════════════════════════════════════ */
+/* ═══ SCROLLBAR ══════════════════════════════════════════════════════ */
 ::-webkit-scrollbar {{ width: 6px; }}
-::-webkit-scrollbar-track {{ background: {DARK}; }}
-::-webkit-scrollbar-thumb {{ background: rgba(255,255,255,0.1); border-radius: 3px; }}
-::-webkit-scrollbar-thumb:hover {{ background: rgba(201,169,110,0.3); }}
+::-webkit-scrollbar-track {{ background: #f1f5f9; }}
+::-webkit-scrollbar-thumb {{ background: rgba(6,57,112,0.15); border-radius: 3px; }}
+::-webkit-scrollbar-thumb:hover {{ background: {ACCENT}; }}
 </style>
 """, unsafe_allow_html=True)
 

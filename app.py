@@ -182,12 +182,12 @@ p, li, span, label, div {{ color: #334155 !important; }}
     box-shadow: 0 8px 40px rgba(6,57,112,0.10);
     position: relative; overflow: hidden;
 }}
-/* blob déco coin sup droit */
+/* blob déco coin sup droit — éloigné pour ne pas déborder sur les champs */
 .form-wrapper::before {{
     content: "";
-    position: absolute; top: -70px; right: -70px;
-    width: 200px; height: 200px;
-    background: radial-gradient(circle, rgba(255,126,121,0.13) 0%, transparent 70%);
+    position: absolute; top: -110px; right: -110px;
+    width: 260px; height: 260px;
+    background: radial-gradient(circle, rgba(255,126,121,0.07) 0%, transparent 65%);
     border-radius: 50%; pointer-events: none;
 }}
 /* blob déco coin inf gauche */
@@ -253,15 +253,20 @@ p, li, span, label, div {{ color: #334155 !important; }}
 }}
 
 /* ═══ NUMBER INPUT ═══════════════════════════════════════════════════ */
+[data-testid="stNumberInput"] {{
+    background: #f1f5f9 !important;
+    border-radius: 16px !important;
+    padding: 0.2rem 0.3rem !important;
+}}
 [data-testid="stNumberInput"] input {{
     height: 54px !important;
-    background: #f1f5f9 !important;
-    border: 2px solid transparent !important;
+    background: transparent !important;
+    border: none !important;
     border-radius: 16px !important;
     color: #1e293b !important;
     font-family: 'Nunito', sans-serif !important;
-    font-size: 0.97rem !important;
-    font-weight: 700 !important;
+    font-size: 1.1rem !important;
+    font-weight: 800 !important;
     padding: 0 0.8rem !important;
     text-align: center !important;
     transition: border-color 0.2s, background 0.2s !important;
@@ -269,20 +274,23 @@ p, li, span, label, div {{ color: #334155 !important; }}
 }}
 [data-testid="stNumberInput"] input:focus {{
     background: white !important;
-    border-color: {ACCENT} !important;
-    box-shadow: 0 0 0 4px rgba(255,126,121,0.12) !important;
     outline: none !important;
+    box-shadow: none !important;
 }}
 [data-testid="stNumberInput"] button {{
-    background: #f1f5f9 !important;
+    background: white !important;
     border: none !important;
-    color: #64748b !important;
+    color: {PRIMARY} !important;
     border-radius: 10px !important;
-    font-weight: 800 !important;
+    font-weight: 900 !important;
+    font-size: 1.1rem !important;
+    box-shadow: 0 1px 4px rgba(6,57,112,0.10) !important;
+    margin: 4px !important;
 }}
 [data-testid="stNumberInput"] button:hover {{
-    background: rgba(255,126,121,0.12) !important;
-    color: {ACCENT} !important;
+    background: {ACCENT} !important;
+    color: white !important;
+    box-shadow: 0 2px 8px rgba(255,126,121,0.25) !important;
 }}
 
 /* ═══ SELECTBOX ══════════════════════════════════════════════════════ */

@@ -326,29 +326,29 @@ p, li, span, label, div {{ color: #334155 !important; }}
     margin-top: 0.8rem;
     transition: border-color 0.2s;
     user-select: none !important;
+    -webkit-user-select: none !important;
 }}
 [data-testid="stCheckbox"]:hover {{
     border-color: {ACCENT} !important;
 }}
-[data-testid="stCheckbox"] label {{
+[data-testid="stCheckbox"] label,
+[data-testid="stCheckbox"] label *,
+[data-testid="stCheckbox"] label:hover,
+[data-testid="stCheckbox"] label:hover *,
+[data-testid="stCheckbox"] label:active,
+[data-testid="stCheckbox"] label:active *,
+[data-testid="stCheckbox"] label:focus,
+[data-testid="stCheckbox"] label:focus * {{
     background: transparent !important;
+    background-color: transparent !important;
+    color: #64748b !important;
     user-select: none !important;
     -webkit-user-select: none !important;
-}}
-[data-testid="stCheckbox"] label:hover,
-[data-testid="stCheckbox"] label:active,
-[data-testid="stCheckbox"] label:focus {{
-    background: transparent !important;
-    color: inherit !important;
 }}
 [data-testid="stCheckbox"] label p {{
     font-size: 0.87rem !important;
-    color: #64748b !important;
     line-height: 1.55 !important;
     font-weight: 500 !important;
-    background: transparent !important;
-    user-select: none !important;
-    -webkit-user-select: none !important;
 }}
 [data-testid="stCheckbox"] input:checked + div {{
     background: {ACCENT} !important;

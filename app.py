@@ -1347,7 +1347,11 @@ if st.session_state.result_payload and st.session_state.geo:
     # Signale à la page parente (Carrd) d'agrandir l'iframe
     st.components.v1.html("""
     <script>
-    try { window.parent.postMessage({ type: "icostim:resultsReady" }, "*"); } catch(e) {}
+    try {
+        // window.parent = iframe Streamlit, window.parent.parent = page Carrd
+        var target = window.parent && window.parent.parent ? window.parent.parent : window.parent;
+        target.postMessage({ type: "icostim:resultsReady" }, "*");
+    } catch(e) {}
     </script>
     """, height=0)
 

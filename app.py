@@ -1338,8 +1338,7 @@ if st.session_state.result_payload and st.session_state.geo:
         "<li>L'agencement, les volumes, l'entretien</li>"
         "<li>Les extérieurs, cave, garage, stationnement, charges de copropriété…</li>"
         "</ul>"
-        "<span style='color:#64748b; font-size:1.05rem'>Cette fourchette est une <b style='color:#334155'>base solide et honnête</b>. "
-        "Mais pour un chiffre vraiment précis et des conseils adaptés à votre projet, rien ne vaut un échange de vive voix.</span>"
+        "<span style='color:#64748b; font-size:1.05rem'>Ça en fait des choses qu'on ne peut pas voir à distance. Cette fourchette est basée sur de vraies ventes, c'est solide, mais pour un chiffre vraiment précis et des conseils adaptés à votre projet, rien ne vaut un vrai échange. Cliquez sur le bouton ci-dessous pour réserver un appel avec moi.</span>"
         "</div>", unsafe_allow_html=True)
 
     st.markdown("<br/>", unsafe_allow_html=True)

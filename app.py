@@ -183,17 +183,17 @@ p, li, span, label, div {{ color: #334155 !important; }}
 
 /* ═══ SECTION PILLS ══════════════════════════════════════════════════ */
 .section-pill {{
-    display: inline-flex; align-items: center; gap: 0.45rem;
+    display: inline-flex; align-items: center; gap: 0.55rem;
     background: #eff6ff;
     border: 2px solid rgba(6,57,112,0.15);
     border-radius: 999px;
-    padding: 0.32rem 0.9rem;
-    font-size: 0.75rem !important;
+    padding: 0.5rem 1.2rem;
+    font-size: 0.92rem !important;
     font-weight: 800 !important;
     text-transform: uppercase;
-    letter-spacing: 0.09em;
+    letter-spacing: 0.07em;
     color: {PRIMARY} !important;
-    margin-bottom: 0.8rem;
+    margin-bottom: 0.9rem;
 }}
 
 /* ═══ LABELS ═════════════════════════════════════════════════════════ */

@@ -468,27 +468,27 @@ p, li, span, label, div {{ color: #334155 !important; }}
 
 /* ═══ MÉTRIQUES RÉSULTATS ════════════════════════════════════════════ */
 .result-metric {{
-    background: white;
+    background: {ACCENT};
     border-radius: 20px;
     padding: 1.3rem 1.2rem;
-    box-shadow: 0 4px 20px rgba(6,57,112,0.08);
+    box-shadow: 0 4px 20px rgba(255,126,121,0.25);
     position: relative; overflow: hidden;
     margin-bottom: 0.8rem;
 }}
 .result-metric::before {{
     content: ""; position: absolute;
     top: 0; left: 0; right: 0; height: 4px;
-    background: {ACCENT};
+    background: rgba(255,255,255,0.35);
     border-radius: 20px 20px 0 0;
 }}
 .result-metric .mk {{
-    font-size: 0.75rem !important; color: #94a3b8 !important;
+    font-size: 0.75rem !important; color: rgba(255,255,255,0.80) !important;
     text-transform: uppercase; letter-spacing: 0.09em;
     margin: 0; font-weight: 800 !important;
 }}
 .result-metric .mv {{
     font-size: 1.4rem !important; font-weight: 900 !important;
-    color: {ACCENT} !important; margin: 0.25rem 0 0;
+    color: white !important; margin: 0.25rem 0 0;
     letter-spacing: -0.02em;
 }}
 

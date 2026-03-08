@@ -944,10 +944,7 @@ with colInfo:
 
 # ── Colonne Formulaire ───────────────────────────────────────────────
 with colForm:
-    st.markdown("""
-    <div class='form-wrapper'>
-    <h2 style='font-family:Poppins,sans-serif;color:#063970;font-size:1.85rem;font-weight:800;margin:0.8rem 0 0.6rem;letter-spacing:-0.02em;line-height:1.15'>Parlez-moi de votre bien</h2>
-    """, unsafe_allow_html=True)
+    st.markdown("<h2 style='font-family:Poppins,sans-serif;color:#063970;font-size:1.85rem;font-weight:800;margin:0 0 1rem;letter-spacing:-0.02em;line-height:1.15'>Parlez-moi de votre bien</h2>", unsafe_allow_html=True)
 
     # Commune
     st.markdown("<span class='section-pill'>📍 Localisation</span>", unsafe_allow_html=True)
@@ -1050,8 +1047,6 @@ with colForm:
         st.markdown(
             "<div class='form-status ready'>✅ Tout est renseigné — cliquez pour lancer l'estimation !</div>",
             unsafe_allow_html=True)
-
-    st.markdown("</div>", unsafe_allow_html=True)  # /form-wrapper
 
     # ── Traitement ───────────────────────────────────────────────────
     if submitted:

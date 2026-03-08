@@ -1384,9 +1384,40 @@ if st.session_state.result_payload and st.session_state.geo:
         st.pydeck_chart(pdk.Deck(
             layers=[layer_comp, layer_bien],
             initial_view_state=view,
+            views=[pdk.View(type="MapView", controller={"scrollZoom": False})],
             map_style="mapbox://styles/mapbox/light-v10",
             tooltip=False),
             use_container_width=True)
+
+        # Bloque le scroll zoom en ciblant l'iframe pydeck depuis le parent
+        st.components.v1.html("""
+        <script>
+        (function() {
+            function blockScroll() {
+                var parent = window.parent.document;
+                // Cible tous les iframes qui contiennent un canvas (= pydeck)
+                parent.querySelectorAll('iframe').forEach(function(iframe) {
+                    try {
+                        var doc = iframe.contentDocument || iframe.contentWindow.document;
+                        doc.querySelectorAll('canvas').forEach(function(canvas) {
+                            if (!canvas._wBlocked) {
+                                canvas._wBlocked = true;
+                                canvas.addEventListener('wheel', function(e) {
+                                    e.stopImmediatePropagation();
+                                    e.preventDefault();
+                                }, { passive: false, capture: true });
+                            }
+                        });
+                    } catch(e) {}
+                });
+            }
+            // Plusieurs tentatives pour attraper la carte après chargement
+            [500, 1000, 2000, 3500].forEach(function(d) {
+                setTimeout(blockScroll, d);
+            });
+        })();
+        </script>
+        """, height=0)
 
         st.markdown(
             "<div style='display:flex; gap:1.5rem; margin-top:0.5rem; font-size:0.85rem; color:#64748b; font-family:Poppins,sans-serif'>"

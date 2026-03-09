@@ -485,10 +485,10 @@ p, li, span, label, div {{ color: #334155 !important; }}
 
 /* ═══ MÉTRIQUES RÉSULTATS ════════════════════════════════════════════ */
 .result-metric {{
-    background: {ACCENT};
+    background: linear-gradient(135deg, #063970, #0a5cb8);
     border-radius: 20px;
     padding: 1.3rem 1.2rem;
-    box-shadow: 0 4px 20px rgba(255,126,121,0.25);
+    box-shadow: 0 4px 20px rgba(6,57,112,0.25);
     position: relative; overflow: hidden;
     margin-bottom: 0.8rem;
 }}

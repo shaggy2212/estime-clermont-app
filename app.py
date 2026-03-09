@@ -1039,7 +1039,8 @@ with colInfo:
     <div class="info-note">
       🔎 <b style="color:#063970 !important; font-weight:700">Une estimation honnête, pas magique.</b><br>
       <span style="color:#334155 !important">Les données viennent des ventes officiellement enregistrées (source : data.gouv.fr, màj novembre 2025).
-      On croise avec ce que vous indiquez pour rester au plus juste. Pas de chiffre sorti du chapeau.</span>
+      On croise avec ce que vous indiquez pour rester au plus juste. Pas de chiffre sorti du chapeau.<br><br>
+      ⚠️ Les prix affichés sur LeBonCoin ou SeLoger, c'est ce que les vendeurs demandent. Pas ce que les acheteurs paient vraiment. Nuance.</span>
     </div>
     """, unsafe_allow_html=True)
 

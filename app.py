@@ -1332,6 +1332,7 @@ with colForm:
     <div style="background:#f1f5f9; border-radius:999px; height:10px; overflow:hidden;">
         <div style="width:{pct}%; background:#FF7E79; height:10px; border-radius:999px; transition:width 0.4s ease;"></div>
     </div>
+    <p style="margin:0.6rem 0 0; font-family:'Poppins',sans-serif; font-size:0.82rem; color:#94a3b8; text-align:center;">⬇️ Votre estimation s'affichera juste en dessous, pas besoin d'ouvrir une nouvelle page.</p>
 </div>
 """, unsafe_allow_html=True)
 

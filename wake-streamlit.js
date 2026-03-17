@@ -20,14 +20,10 @@ const { chromium } = require("playwright");
     if (isSleep) {
       console.log("Sleep detected 💤 — réveil en cours...");
 
-      // Prendre un screenshot pour débugger si besoin
-      await page.screenshot({ path: "/tmp/sleep.png" });
-
       const selectors = [
         "button:has-text('Yes, get this app back up!')",
         "button:has-text('get this app back up')",
         "button:has-text('Wake')",
-        "button:has-text('wake')",
         "[data-testid='stWakeupButton']",
       ];
 
@@ -42,8 +38,19 @@ const { chromium } = require("playwright");
         }
       }
 
-      if (!clicked) {
-        // Dernier recours : lister tous les boutons visibles
+      if (clicked) {
+        // Attendre que Streamlit confirme le réveil
+        console.log("Attente confirmation réveil...");
+        await page.waitForTimeout(5000);
+
+        try {
+          await page.waitForSelector('[data-testid="stApp"]', { timeout: 30000 });
+          console.log("App réveillée et chargée ✅");
+        } catch (e) {
+          // Parfois Streamlit prend plus de temps — le clic a quand même été enregistré
+          console.log("App en cours de démarrage (le clic a été enregistré) ✅");
+        }
+      } else {
         const buttons = await page.locator("button").allTextContents();
         console.log("Boutons trouvés:", JSON.stringify(buttons));
       }

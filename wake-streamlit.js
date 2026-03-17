@@ -1,96 +1,75 @@
-const { chromium } = require("playwright");
+/**
+ * wake-streamlit.js — version légère sans Playwright
+ * Utilise l'API health de Streamlit Cloud pour détecter la veille
+ * et déclenche un réveil via HTTP simple.
+ */
 
-(async () => {
-  const url = process.env.STREAMLIT_URL;
-  if (!url) throw new Error("Missing STREAMLIT_URL env var");
+const https = require("https");
 
-  const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage({
-    viewport: { width: 1280, height: 720 },
+const APP_URL = process.env.STREAMLIT_URL;
+if (!APP_URL) throw new Error("Missing STREAMLIT_URL env var");
+
+const url = new URL(APP_URL);
+const hostname = url.hostname;
+
+function fetchUrl(targetUrl, options = {}) {
+  return new Promise((resolve, reject) => {
+    const parsedUrl = new URL(targetUrl);
+    const req = https.request({
+      hostname: parsedUrl.hostname,
+      path: parsedUrl.pathname + parsedUrl.search,
+      method: options.method || "GET",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; keepalive-bot/1.0)",
+        "Accept": "text/html,application/json,*/*",
+        ...(options.headers || {}),
+      },
+      timeout: 20000,
+    }, (res) => {
+      let body = "";
+      res.on("data", chunk => body += chunk);
+      res.on("end", () => resolve({ status: res.statusCode, body }));
+    });
+    req.on("error", reject);
+    req.on("timeout", () => { req.destroy(); reject(new Error("Request timeout")); });
+    req.end();
   });
+}
 
-  const HARD_TIMEOUT_MS = 90000;
-  const hardTimeout = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error("Hard timeout reached")), HARD_TIMEOUT_MS)
-  );
+async function run() {
+  console.log(`Checking: ${APP_URL}`);
 
-  async function run() {
-    await page.goto(url, { waitUntil: "networkidle", timeout: 40000 });
-
-    // Attendre que Streamlit ait vraiment rendu quelque chose
-    // Soit l'app active, soit la page de veille
-    try {
-      await Promise.race([
-        page.waitForSelector('[data-testid="stApp"]', { timeout: 15000 }),
-        page.waitForSelector("text=This app has gone to sleep", { timeout: 15000 }),
-        page.waitForSelector("text=Zzzz", { timeout: 15000 }),
-        page.waitForSelector("button", { timeout: 15000 }),
-      ]);
-    } catch (e) {
-      console.log("Rien de reconnaissable rendu après 15s, on continue quand même...");
-    }
-
-    // Pause supplémentaire pour le rendu complet
-    await page.waitForTimeout(3000);
-
-    const bodyText = (await page.textContent("body").catch(() => "")) || "";
-    console.log("Body snippet:", bodyText.substring(0, 400));
-
-    const isSleep =
-      /zzzz|get this app back up|back up|this app has gone to sleep|wake it up|yes, get this app|app has gone to sleep/i.test(bodyText);
-
-    if (isSleep) {
-      console.log("Sleep detected 💤 — tentative de réveil...");
-
-      const selectors = [
-        "button:has-text('Yes, get this app back up!')",
-        "button:has-text('get this app back up')",
-        "button:has-text('Wake up')",
-        "button:has-text('wake it up')",
-        "[data-testid='stWakeupButton']",
-      ];
-
-      let clicked = false;
-      for (const sel of selectors) {
-        const btn = page.locator(sel).first();
-        if ((await btn.count()) > 0) {
-          try {
-            await btn.click({ timeout: 8000 });
-            console.log(`Wake clicked via: ${sel} ✅`);
-            clicked = true;
-            break;
-          } catch (e) {
-            console.log(`Selector ${sel} trouvé mais clic échoué:`, e.message);
-          }
-        }
-      }
-
-      if (!clicked) {
-        console.log("Bouton non trouvé ⚠️ — body complet:", bodyText.substring(0, 800));
-      }
-
-      await page.waitForTimeout(5000);
-      await page.reload({ waitUntil: "networkidle", timeout: 40000 });
-
-      try {
-        await page.waitForSelector('[data-testid="stApp"]', { timeout: 30000 });
-        console.log("App revenue en ligne ✅");
-      } catch (e) {
-        console.log("App pas encore prête (peut prendre 1-2 min)");
-      }
-
-    } else {
-      console.log("App déjà active ✅");
-    }
-  }
+  // Health check natif Streamlit
+  const healthUrl = `https://${hostname}/_stcore/health`;
 
   try {
-    await Promise.race([run(), hardTimeout]);
-    console.log("Keepalive OK ✅");
+    const health = await fetchUrl(healthUrl);
+    console.log(`Health status: ${health.status} | body: ${health.body.substring(0, 100)}`);
+
+    if (health.status === 200 && health.body.includes("ok")) {
+      console.log("App active ✅ — rien à faire");
+      return;
+    }
   } catch (e) {
-    console.log("Erreur non bloquante:", e.message);
-    console.log("Keepalive OK ✅");
-  } finally {
-    await browser.close();
+    console.log(`Health check failed (app probablement en veille): ${e.message}`);
   }
-})();
+
+  // App en veille — on envoie un GET sur la page principale pour déclencher le réveil
+  console.log("App en veille 💤 — envoi du trigger de réveil...");
+
+  try {
+    const main = await fetchUrl(APP_URL);
+    console.log(`Main page status: ${main.status}`);
+    const isSleep = /zzzz|gone to sleep|back up/i.test(main.body);
+    console.log(isSleep ? "Page de veille confirmée — réveil en cours (1-2 min)" : "App en cours de démarrage ✅");
+  } catch (e) {
+    console.log(`Main page: ${e.message}`);
+  }
+
+  console.log("Keepalive trigger envoyé ✅");
+}
+
+run().catch(e => {
+  console.log("Erreur:", e.message);
+  console.log("OK ✅");
+});

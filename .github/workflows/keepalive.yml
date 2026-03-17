@@ -11,6 +11,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: Linux-playwright
+          restore-keys: Linux-playwright
+
+      - name: Install dependencies
+        run: |
+          if [ ! -f package.json ]; then npm init -y; fi
+          npm i -D playwright
+
+      - name: Install Chromium
+        run: npx playwright install chromium
+
       - name: Run wake script
         env:
           STREAMLIT_URL: "https://estime-clermont-app-jq8fmfdn95ggqtukbncztr.streamlit.app/"

@@ -7,6 +7,9 @@ import pydeck as pdk
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 
+# Import du module d'envoi d'email Brevo (fichier email_sender.py à côté de app.py)
+from email_sender import send_estimation_email
+
 # ===========================
 # Config
 # ===========================
@@ -57,6 +60,7 @@ _defaults = {
     "addr_typed": "", "addr_choice_display": "", "addr_choice": "",
     "prenom": "", "email": "", "consent": False,
     "_kit_result": None, "_kit_error": "", "_kit_response": "",
+    "_brevo_result": None, "_brevo_error": "",
 }
 for k, v in _defaults.items():
     st.session_state.setdefault(k, v)
@@ -1015,6 +1019,19 @@ if DEBUG:
         if st.session_state.get("_kit_response"):
             st.write("Réponse KIT :", st.session_state["_kit_response"])
 
+        # === Debug Brevo (envoi d'email d'estimation) ===
+        st.markdown("---")
+        smtp_user = st.secrets.get("BREVO_SMTP_USER", "")
+        smtp_pass = st.secrets.get("BREVO_SMTP_PASS", "")
+        from_email = st.secrets.get("BREVO_FROM_EMAIL", "")
+        st.write(f"BREVO_SMTP_USER  : {'✅ ' + smtp_user if smtp_user else '❌ MANQUANT'}")
+        st.write(f"BREVO_SMTP_PASS  : {'✅ ****** (' + str(len(smtp_pass)) + ' caractères)' if smtp_pass else '❌ MANQUANT'}")
+        st.write(f"BREVO_FROM_EMAIL : {'✅ ' + from_email if from_email else '❌ MANQUANT'}")
+        if st.session_state.get("_brevo_result") is not None:
+            st.write("Dernier envoi Brevo :", "✅ OK" if st.session_state["_brevo_result"] else "❌ Échec")
+        if st.session_state.get("_brevo_error"):
+            st.error(f"Erreur Brevo : {st.session_state['_brevo_error']}")
+
 
 # ===========================
 # LAYOUT
@@ -1379,6 +1396,20 @@ with colForm:
                 tension_label=str(payload.get("tension", {}).get("label", "")),
                 tension_score=int(payload.get("tension", {}).get("score", 0)),
                 adresse=str(geo.get("label", ""))
+            )
+
+            # === Envoi de l'email d'estimation via Brevo SMTP ===
+            send_estimation_email(
+                to_email=st.session_state.email,
+                prenom=st.session_state.prenom,
+                adresse=str(geo.get("label", "")),
+                bien_type=str(st.session_state.bien_type),
+                surface=float(st.session_state.surface),
+                est_min=float(payload.get("est_min", 0)),
+                est_max=float(payload.get("est_max", 0)),
+                pm2=float(payload.get("pm2_med", 0)),
+                fiabilite=str(payload.get("reliability", "")),
+                attractivite=f"{payload.get('tension', {}).get('label', '')} ({int(payload.get('tension', {}).get('score', 0))}/100)",
             )
         finally:
             prog_slot.empty()

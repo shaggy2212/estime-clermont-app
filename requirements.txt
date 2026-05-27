@@ -1,0 +1,7 @@
+streamlit
+numpy
+pandas
+requests
+pydeck
+pyarrow
+PyJWT>=2.8.0

@@ -10,6 +10,9 @@ from typing import Optional, Dict, Any, List, Tuple
 # Import du module d'envoi d'email Brevo (fichier email_sender.py à côté de app.py)
 from email_sender import send_estimation_email
 
+# Import du module d'ajout de membres Ghost (fichier ghost_sender.py à côté de app.py)
+from ghost_sender import add_to_ghost
+
 # ===========================
 # Config
 # ===========================
@@ -61,6 +64,7 @@ _defaults = {
     "prenom": "", "email": "", "consent": False,
     "_kit_result": None, "_kit_error": "", "_kit_response": "",
     "_brevo_result": None, "_brevo_error": "",
+    "_ghost_result": None, "_ghost_error": "", "_ghost_response": "",
 }
 for k, v in _defaults.items():
     st.session_state.setdefault(k, v)
@@ -1032,6 +1036,19 @@ if DEBUG:
         if st.session_state.get("_brevo_error"):
             st.error(f"Erreur Brevo : {st.session_state['_brevo_error']}")
 
+        # === Debug Ghost (ajout du membre dans le blog) ===
+        st.markdown("---")
+        ghost_url = st.secrets.get("GHOST_ADMIN_URL", "")
+        ghost_key = st.secrets.get("GHOST_ADMIN_KEY", "")
+        st.write(f"GHOST_ADMIN_URL : {'✅ ' + ghost_url if ghost_url else '❌ MANQUANT'}")
+        st.write(f"GHOST_ADMIN_KEY : {'✅ ****** (' + str(len(ghost_key)) + ' caractères)' if ghost_key else '❌ MANQUANTE'}")
+        if st.session_state.get("_ghost_result") is not None:
+            st.write("Dernier ajout Ghost :", "✅ OK" if st.session_state["_ghost_result"] else "❌ Échec")
+        if st.session_state.get("_ghost_error"):
+            st.error(f"Erreur Ghost : {st.session_state['_ghost_error']}")
+        if st.session_state.get("_ghost_response"):
+            st.write("Réponse Ghost :", st.session_state["_ghost_response"])
+
 
 # ===========================
 # LAYOUT
@@ -1410,6 +1427,13 @@ with colForm:
                 pm2=float(payload.get("pm2_med", 0)),
                 fiabilite=str(payload.get("reliability", "")),
                 attractivite=f"{payload.get('tension', {}).get('label', '')} ({int(payload.get('tension', {}).get('score', 0))}/100)",
+            )
+
+            # === Ajout du contact dans Ghost (membres du blog) ===
+            add_to_ghost(
+                email=st.session_state.email,
+                prenom=st.session_state.prenom,
+                note=f"Estimation : {geo.get('label', '')} — {st.session_state.bien_type} {int(float(st.session_state.surface))}m²",
             )
         finally:
             prog_slot.empty()

@@ -1,0 +1,38 @@
+name: Maj DVF
+
+# Se lance manuellement (bouton "Run workflow") + automatiquement
+# vers le 25 avril et le 25 octobre, quand Etalab publie ses nouvelles donnees.
+on:
+  workflow_dispatch:        # bouton manuel
+  schedule:
+    - cron: "0 6 25 4 *"    # 25 avril a 6h UTC
+    - cron: "0 6 25 10 *"   # 25 octobre a 6h UTC
+
+jobs:
+  update-dvf:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # autorise le commit du parquet
+
+    steps:
+      - name: Recuperer le repo
+        uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer les dependances
+        run: pip install pandas pyarrow requests
+
+      - name: Regenerer le parquet
+        run: python build_dvf_local.py --output data/dvf_local.parquet
+
+      - name: Commit du nouveau parquet
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add data/dvf_local.parquet
+          git diff --staged --quiet || git commit -m "Maj auto DVF $(date +%Y-%m-%d)"
+          git push

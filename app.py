@@ -50,7 +50,7 @@ BAN_SEARCH_URL     = "https://api-adresse.data.gouv.fr/search/"
 BAN_COMPLETION_URL = "https://api-adresse.data.gouv.fr/search/"
 
 DVF_LOCAL_PATH   = Path("data/dvf_local.parquet")
-DVF_CACHE_BUSTER = "v9"
+DVF_CACHE_BUSTER = "v10"
 
 # ===========================
 # Session state
@@ -834,6 +834,11 @@ def load_dvf_local(_bust: str = DVF_CACHE_BUSTER) -> pd.DataFrame:
         ("latitude",            lambda x: pd.to_numeric(x, errors="coerce")),
     ]:
         df[col] = fn(df.get(col))
+    # nb_pieces : on le rend numérique si présent, sinon on crée la colonne vide
+    if "nb_pieces" in df.columns:
+        df["nb_pieces"] = pd.to_numeric(df["nb_pieces"], errors="coerce")
+    else:
+        df["nb_pieces"] = np.nan
     df["type_local_raw"] = df.get("type_local")
     df["type_local"]     = df["type_local_raw"].apply(normalize_type_local)
     df = df.dropna(subset=["date_mutation","valeur_fonciere","surface_reelle_bati","longitude","latitude","type_local"])
@@ -841,52 +846,100 @@ def load_dvf_local(_bust: str = DVF_CACHE_BUSTER) -> pd.DataFrame:
     df = df[(df["valeur_fonciere"] > 1000) & (df["surface_reelle_bati"] >= 10)]
     return df
 
-def dvf_select_similaires_strict(df_all, lat, lon, bien_type, surface) -> Tuple[pd.DataFrame, int, float]:
-    if df_all.empty: return pd.DataFrame(), 0, 0.0
+def dvf_select_similaires_strict(df_all, lat, lon, bien_type, surface, nb_pieces=0) -> Tuple[pd.DataFrame, int, float, int]:
+    """
+    Sélectionne les ventes comparables avec élargissement progressif sur 3 axes :
+      1. fenêtre temporelle : 12 mois, puis 18, puis 24 (on garde la donnée la plus fraîche possible)
+      2. rayon géographique : 600m → 3500m
+      3. surface : tolérances croissantes
+      4. nombre de pièces : ±1, puis ±2, puis ignoré (les ventes sans nb_pieces ne sont jamais exclues)
+    Retourne (df, rayon_utilisé, tolérance_surface_utilisée, fenêtre_mois_utilisée).
+    """
+    if df_all.empty: return pd.DataFrame(), 0, 0.0, 0
     target_type = normalize_type_local(bien_type)
     surface     = float(surface)
     max_date    = df_all["date_mutation"].max()
-    if pd.isna(max_date): return pd.DataFrame(), 0, 0.0
-    df = df_all[df_all["date_mutation"] >= max_date - pd.Timedelta(days=365)].copy()
-    if df.empty: return pd.DataFrame(), 0, 0.0
-    df["type_local"] = df["type_local"].apply(normalize_type_local)
-    df = df[df["type_local"] == target_type].copy()
-    if df.empty: return pd.DataFrame(), 0, 0.0
-    lat0, lon0 = float(lat), float(lon)
-    R    = 6371000.0
-    phi1 = np.radians(lat0)
-    phi2 = np.radians(df["latitude"].to_numpy(float))
-    dphi = np.radians(df["latitude"].to_numpy(float)  - lat0)
-    dl   = np.radians(df["longitude"].to_numpy(float) - lon0)
-    a    = np.sin(dphi/2)**2 + np.cos(phi1)*np.cos(phi2)*np.sin(dl/2)**2
-    df["distance_m"] = 2 * R * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
-    radii      = [600, 900, 1500, 2500, 3500]
-    tolerances = [0.20,0.25,0.30,0.35] if target_type=="Appartement" else [0.25,0.30,0.40,0.45]
-    min_needed = 4
-    best = pd.DataFrame(); used_radius = 0; used_tol = 0.0
-    for rad in radii:
-        df_r = df[df["distance_m"] <= rad].copy()
-        if df_r.empty: continue
-        for tol in tolerances:
-            lo, hi = surface*(1-tol), surface*(1+tol)
-            df_s = df_r[(df_r["surface_reelle_bati"]>=lo)&(df_r["surface_reelle_bati"]<=hi)].copy()
-            if df_s.empty: continue
-            df_s["prix_m2"] = df_s["valeur_fonciere"] / df_s["surface_reelle_bati"]
-            df_s = df_s.replace([np.inf,-np.inf], np.nan).dropna(subset=["prix_m2"])
-            if len(df_s) >= 10:
-                q10, q90 = df_s["prix_m2"].quantile(0.10), df_s["prix_m2"].quantile(0.90)
-                df_s = df_s[(df_s["prix_m2"]>=q10)&(df_s["prix_m2"]<=q90)]
-            if len(df_s) >= min_needed:
-                best = df_s; used_radius = rad; used_tol = tol; break
+    if pd.isna(max_date): return pd.DataFrame(), 0, 0.0, 0
+
+    windows_months = [12, 18, 24]
+    radii          = [600, 900, 1500, 2500, 3500]
+    tolerances     = [0.20,0.25,0.30,0.35] if target_type=="Appartement" else [0.25,0.30,0.40,0.45]
+    # Tolérance sur le nb de pièces, du plus serré au plus large.
+    # None = on ignore complètement le critère (dernier filet de sécurité).
+    pieces_tols    = [1, 2, None] if int(nb_pieces or 0) > 0 else [None]
+    min_needed     = 4
+
+    best = pd.DataFrame(); used_radius = 0; used_tol = 0.0; used_window = 0
+
+    for win in windows_months:
+        df = df_all[df_all["date_mutation"] >= max_date - pd.Timedelta(days=int(win*30.4))].copy()
+        if df.empty: continue
+        df["type_local"] = df["type_local"].apply(normalize_type_local)
+        df = df[df["type_local"] == target_type].copy()
+        if df.empty: continue
+
+        lat0, lon0 = float(lat), float(lon)
+        R    = 6371000.0
+        phi1 = np.radians(lat0)
+        phi2 = np.radians(df["latitude"].to_numpy(float))
+        dphi = np.radians(df["latitude"].to_numpy(float)  - lat0)
+        dl   = np.radians(df["longitude"].to_numpy(float) - lon0)
+        a    = np.sin(dphi/2)**2 + np.cos(phi1)*np.cos(phi2)*np.sin(dl/2)**2
+        df["distance_m"] = 2 * R * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+
+        for rad in radii:
+            df_r = df[df["distance_m"] <= rad].copy()
+            if df_r.empty: continue
+            for tol in tolerances:
+                lo, hi = surface*(1-tol), surface*(1+tol)
+                df_s_base = df_r[(df_r["surface_reelle_bati"]>=lo)&(df_r["surface_reelle_bati"]<=hi)].copy()
+                if df_s_base.empty: continue
+                for ptol in pieces_tols:
+                    df_s = df_s_base.copy()
+                    # On ne filtre sur les pièces que si on a un nb cible ET que la donnée existe.
+                    # Les ventes sans nb_pieces (NaN) sont toujours conservées pour ne pas vider le marché.
+                    if ptol is not None and "nb_pieces" in df_s.columns:
+                        p = pd.to_numeric(df_s["nb_pieces"], errors="coerce")
+                        df_s = df_s[(p.isna()) | ((p >= nb_pieces - ptol) & (p <= nb_pieces + ptol))]
+                    if df_s.empty: continue
+                    df_s["prix_m2"] = df_s["valeur_fonciere"] / df_s["surface_reelle_bati"]
+                    df_s = df_s.replace([np.inf,-np.inf], np.nan).dropna(subset=["prix_m2"])
+                    if len(df_s) >= 10:
+                        q10, q90 = df_s["prix_m2"].quantile(0.10), df_s["prix_m2"].quantile(0.90)
+                        df_s = df_s[(df_s["prix_m2"]>=q10)&(df_s["prix_m2"]<=q90)]
+                    if len(df_s) >= min_needed:
+                        best = df_s; used_radius = rad; used_tol = tol; used_window = win; break
+                if not best.empty: break
+            if not best.empty: break
         if not best.empty: break
+
     if best.empty:
+        # Fallback ultime : sur 24 mois, on prend les 3 biens les plus proches répondant à la surface,
+        # sans contrainte de pièces ni de volume minimum.
+        df = df_all[df_all["date_mutation"] >= max_date - pd.Timedelta(days=int(24*30.4))].copy()
+        if df.empty:
+            return pd.DataFrame(), 0, 0.0, 0
+        df["type_local"] = df["type_local"].apply(normalize_type_local)
+        df = df[df["type_local"] == target_type].copy()
+        if df.empty:
+            return pd.DataFrame(), 0, 0.0, 0
+        lat0, lon0 = float(lat), float(lon)
+        R    = 6371000.0
+        phi1 = np.radians(lat0)
+        phi2 = np.radians(df["latitude"].to_numpy(float))
+        dphi = np.radians(df["latitude"].to_numpy(float)  - lat0)
+        dl   = np.radians(df["longitude"].to_numpy(float) - lon0)
+        a    = np.sin(dphi/2)**2 + np.cos(phi1)*np.cos(phi2)*np.sin(dl/2)**2
+        df["distance_m"] = 2 * R * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
         tol = tolerances[-1]; rad = radii[-1]; lo, hi = surface*(1-tol), surface*(1+tol)
         df_fb = df[(df["distance_m"]<=rad)&(df["surface_reelle_bati"]>=lo)&(df["surface_reelle_bati"]<=hi)].copy()
-        if df_fb.empty: return pd.DataFrame(), 0, 0.0
+        if df_fb.empty:
+            return pd.DataFrame(), 0, 0.0, 0
         df_fb["prix_m2"] = df_fb["valeur_fonciere"] / df_fb["surface_reelle_bati"]
         df_fb = df_fb.replace([np.inf,-np.inf], np.nan).dropna(subset=["prix_m2"])
-        return df_fb.sort_values(["distance_m","date_mutation"], ascending=[True,False]).head(3), rad, tol
-    return best.sort_values(["distance_m","date_mutation"], ascending=[True,False]).copy(), used_radius, used_tol
+        return df_fb.sort_values(["distance_m","date_mutation"], ascending=[True,False]).head(3), rad, tol, 24
+
+    return best.sort_values(["distance_m","date_mutation"], ascending=[True,False]).copy(), used_radius, used_tol, used_window
 
 def reliability_label(n: int) -> str:
     if n > 15: return "🟢 Très élevée"
@@ -895,14 +948,19 @@ def reliability_label(n: int) -> str:
     if n >= 2:  return "🟠 Modérée"
     return "🔴 Faible"
 
-def market_tension_index(df_local: pd.DataFrame, used_radius: int) -> Dict[str, Any]:
+def market_tension_index(df_local: pd.DataFrame, used_radius: int, used_window: int = 12) -> Dict[str, Any]:
     if df_local is None or df_local.empty or used_radius <= 0:
         return {"score": 0, "label": "🔴 Inconnu", "detail": "Pas assez de données"}
     n          = int(len(df_local))
     area_km2   = np.pi * (used_radius/1000.0)**2
-    density    = n / max(1e-6, area_km2)
 
-    # Score densité : calibré pour un petit marché (1-3/km² = normal, 5+/km² = actif)
+    # On ramène le nombre de ventes à un RYTHME ANNUEL équivalent.
+    # Sinon, élargir la fenêtre à 24 mois gonflerait artificiellement l'attractivité.
+    win = max(1, int(used_window or 12))
+    n_annual   = n * (12.0 / win)
+    density    = n_annual / max(1e-6, area_km2)
+
+    # Score densité : calibré pour un petit marché (1-3/km²/an = normal, 5+/km²/an = actif)
     # exp(-density/4) → 1/km² donne ~22pts, 3/km² ~53pts, 6/km² ~78pts
     s_density  = 100 * (1 - np.exp(-density / 4))
 
@@ -911,9 +969,10 @@ def market_tension_index(df_local: pd.DataFrame, used_radius: int) -> Dict[str, 
     days_since = int(max(0,(pd.Timestamp.utcnow().tz_localize(None)-pd.to_datetime(last_date).tz_localize(None)).days))
     s_recency  = 100 * np.exp(-days_since / 120)
 
-    # Score volume brut : bonus si plus de 4 ventes dans le rayon min (600m)
+    # Score volume brut : bonus si plus de 4 ventes dans le rayon min (800m), ramené au rythme annuel
     df_close   = df_local[df_local.get("distance_m", pd.Series([used_radius]*n)) <= 800] if "distance_m" in df_local.columns else df_local
-    s_volume   = float(clamp(len(df_close) / 8 * 100, 0, 100))
+    n_close_annual = len(df_close) * (12.0 / win)
+    s_volume   = float(clamp(n_close_annual / 8 * 100, 0, 100))
 
     # Score homogénéité prix (IQR faible = marché stable et lisible)
     pm2 = pd.to_numeric(df_local.get("prix_m2"), errors="coerce").replace([np.inf,-np.inf], np.nan).dropna()
@@ -929,8 +988,9 @@ def market_tension_index(df_local: pd.DataFrame, used_radius: int) -> Dict[str, 
 
     label = ("🔥 Très attractif" if score >= 65 else "⚡ Attractif" if score >= 45
              else "🙂 Équilibré" if score >= 28 else "📈 Marché stable")
+    detail_win = "" if win == 12 else f" · données sur {win} mois"
     return {"score": int(round(score)), "label": label,
-            "detail": f"Densité ~{density:.1f}/km² · Dernière vente {days_since}j · IQR ~{iqr_ratio:.2f}"}
+            "detail": f"Densité ~{density:.1f}/km²/an · Dernière vente {days_since}j · IQR ~{iqr_ratio:.2f}{detail_win}"}
 
 def compute_adjustments(bien_type, surface, nb_pieces, nb_chambres, etat, distance_m):
     etat_factor     = {"À rénover":0.88,"Moyen":1.00,"Bon":1.05,"Rénové":1.10}.get(etat, 1.00)
@@ -949,7 +1009,7 @@ def band_from_reliability_and_tension(n, tension_score, bien_type):
 def compute_micro_market_estimate(df_all, lat, lon, bien_type, surface, nb_pieces, nb_chambres, etat):
     distance_m  = haversine_m(lat, lon, GARE_LAT, GARE_LON)
     quartier    = quartier_from_distance(distance_m)
-    df_local, used_radius, used_tol = dvf_select_similaires_strict(df_all, lat, lon, bien_type, surface)
+    df_local, used_radius, used_tol, used_window = dvf_select_similaires_strict(df_all, lat, lon, bien_type, surface, nb_pieces)
     target_type = normalize_type_local(bien_type)
     if not df_local.empty:
         df_local["type_local"] = df_local["type_local"].apply(normalize_type_local)
@@ -969,7 +1029,7 @@ def compute_micro_market_estimate(df_all, lat, lon, bien_type, surface, nb_piece
             "Ouest (Neuf)":{"Maison":2450,"Appartement":2800}}[quartier][target_type])
     adj        = compute_adjustments(target_type, surface, nb_pieces, nb_chambres, etat, distance_m)
     adj_factor = adj["etat"]*adj["pieces"]*adj["chambres"]*adj["gare"]*adj["scale"]
-    tension    = market_tension_index(df_local, used_radius if used_radius else 0)
+    tension    = market_tension_index(df_local, used_radius if used_radius else 0, used_window)
     tscore     = int(tension.get("score", 0))
     tilt       = 0.022 if tscore>=65 else 0.012 if tscore>=45 else 0.0 if tscore>=28 else -0.018
     center     = pm2_med * surface * adj_factor * (1.0+tilt)
@@ -986,8 +1046,13 @@ def compute_micro_market_estimate(df_all, lat, lon, bien_type, surface, nb_piece
         for _, r in df_prev.iterrows():
             try: mois = pd.to_datetime(r["date_mutation"]).strftime("%m/%Y")
             except: mois = "—"
+            try:
+                _nbp = int(float(r.get("nb_pieces")))
+            except (TypeError, ValueError):
+                _nbp = 0
             preview.append({"type_local":str(r.get("type_local","")),
                 "surface":int(round(float(r.get("surface_reelle_bati",0)))),
+                "nb_pieces":_nbp,
                 "prix":float(r.get("valeur_fonciere",0)),"mois":mois,
                 "commune":str(r.get("nom_commune","Secteur")),
                 "dist":int(round(float(r.get("distance_m",0))/100)*100)})
@@ -997,7 +1062,7 @@ def compute_micro_market_estimate(df_all, lat, lon, bien_type, surface, nb_piece
     return {"bien_type":target_type,"surface":float(surface),"quartier":quartier,
         "distance_gare_m":int(round(distance_m)),"pm2_med":float(pm2_med),"adj":adj,
         "adj_factor":float(adj_factor),"tilt":float(tilt),"est_min":est_min,"est_max":est_max,
-        "n":n,"used_radius":int(used_radius or 0),"used_tol":float(used_tol or 0),
+        "n":n,"used_radius":int(used_radius or 0),"used_tol":float(used_tol or 0),"used_window":int(used_window or 0),
         "reliability":rel,"tension":tension,"last_update":last_update,"preview":preview,"map_points":map_points}
 
 
@@ -1072,7 +1137,7 @@ with colInfo:
     st.markdown("""
     <div class="info-note">
       🔎 <b style="color:#063970 !important; font-weight:700">Une estimation honnête, pas magique.</b><br>
-      <span style="color:#334155 !important">Les données viennent des ventes officiellement enregistrées (source : data.gouv.fr, màj novembre 2025).
+      <span style="color:#334155 !important">Les données viennent des ventes officiellement enregistrées (source : data.gouv.fr, màj avril 2026).
       On croise avec ce que vous indiquez pour rester au plus juste. Pas de chiffre sorti du chapeau.<br><br>
       ⚠️ Les prix affichés sur LeBonCoin ou SeLoger, c'est ce que les vendeurs demandent. Pas ce que les acheteurs paient vraiment. Nuance.</span>
     </div>
@@ -1476,12 +1541,21 @@ if st.session_state.result_payload and st.session_state.geo:
         st.markdown(f"<div class='result-metric'><p class='mk'>Attractivité du secteur</p>"
                     f"<p class='mv'>{tens.get('label','—')} ({tscore}/100)</p></div>", unsafe_allow_html=True)
 
+    # Mention discrète si l'estimation s'appuie sur une fenêtre élargie (> 12 mois)
+    _uw = int(hp.get("used_window", 0) or 0)
+    _window_note = ""
+    if _uw > 12:
+        _window_note = (f"<br/><span style='color:#94a3b8; font-size:0.92rem'>"
+                        f"ℹ️ Peu de ventes très récentes sur ce micro-secteur : l'analyse remonte jusqu'à {_uw} mois "
+                        f"pour rester fiable.</span>")
+
     st.markdown(
         f"<div class='result-card'>"
         f"<b>Adresse analysée :</b> {geo.get('label','')}<br/>"
         f"<b>Zone (proxy) :</b> {hp.get('quartier','—')} — <b>Distance gare :</b> {hp.get('distance_gare_m','—')} m<br/>"
         f"<b>Prix médian au m² :</b> ~{eur(hp.get('pm2_med',0))} / m²<br/>"
-        f"<b>Biens comparables :</b> {hp.get('n',0)} ventes (12 mois) — rayon max : {hp.get('used_radius','—')} m"
+        f"<b>Biens comparables :</b> {hp.get('n',0)} ventes — rayon max : {hp.get('used_radius','—')} m"
+        f"{_window_note}"
         f"</div>", unsafe_allow_html=True)
 
     st.markdown(f"<div class='tension-box'>{tension_context_message(tscore)}</div>", unsafe_allow_html=True)
@@ -1595,8 +1669,9 @@ if st.session_state.result_payload and st.session_state.geo:
     if hp.get("preview"):
         with st.expander("🧾 Voir les biens comparables (localisation volontairement vague)"):
             for r in hp["preview"]:
+                pieces_txt = f" · **{r['nb_pieces']} p.**" if r.get("nb_pieces") else ""
                 st.markdown(
-                    f"- **{r['type_local']}** · **{r['surface']} m²** · **{eur(r['prix'])}** · "
+                    f"- **{r['type_local']}** · **{r['surface']} m²**{pieces_txt} · **{eur(r['prix'])}** · "
                     f"**{r['mois']}** · **{r['commune']}** (~{r['dist']} m)")
 
     if DEBUG:

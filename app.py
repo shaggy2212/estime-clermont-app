@@ -1128,7 +1128,7 @@ with colInfo:
       <ul>
         <li><span class="check">✓</span> Une fourchette de prix réaliste, basée sur les ventes récentes de votre secteur</li>
         <li><span class="check">✓</span> Le prix médian au m² pratiqué dans votre quartier ces 12 derniers mois</li>
-        <li><span class="check">✓</span> Des biens comparables au vôtre — même type, surface similaire, même zone</li>
+        <li><span class="check">✓</span> Des biens comparables au vôtre : même type, surface similaire, même zone</li>
         <li><span class="check">✓</span> Un indice d'attractivité de votre secteur (est-ce que les biens partent vite ?)</li>
         <li><span class="check">✓</span> Une estimation affinée selon l'état, la surface, les pièces et la localisation</li>
       </ul>

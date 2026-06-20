@@ -724,6 +724,16 @@ hr {{
         max-width: 100% !important;
     }}
 }}
+
+/* Pas de scroll interne dans l'app : c'est la page Ghost qui scrolle, point */
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"],
+section.main, .main, .main .block-container {{
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1779,3 +1789,35 @@ if st.session_state.result_payload and st.session_state.geo:
     if DEBUG:
         with st.expander("🧪 Debug payload"):
             st.write(hp); st.write("geo:", geo)
+
+
+# ===========================
+# Hauteur dynamique vers la page parente (Ghost)
+# Supprime le scroll interne : l'iframe se cale pile sur le contenu.
+# ===========================
+st.components.v1.html("""
+<script>
+(function(){
+  var appDoc, ghost;
+  try { appDoc = window.parent.document; } catch(e){ return; }
+  try { ghost = window.parent.parent || window.parent; } catch(e){ ghost = window.parent; }
+  var last = 0;
+  function measure(){
+    try{
+      var h = Math.max(
+        appDoc.body ? appDoc.body.scrollHeight : 0,
+        appDoc.documentElement ? appDoc.documentElement.scrollHeight : 0
+      );
+      if (h && Math.abs(h - last) > 4){
+        last = h;
+        ghost.postMessage({type:"icostim:height", height:h}, "*");
+      }
+    }catch(e){}
+  }
+  measure();
+  try { new ResizeObserver(measure).observe(appDoc.body); } catch(e){}
+  setInterval(measure, 800);
+  window.addEventListener("resize", measure);
+})();
+</script>
+""", height=0)

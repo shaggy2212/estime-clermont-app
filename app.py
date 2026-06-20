@@ -4,13 +4,14 @@ import pandas as pd
 import requests
 import time
 import pydeck as pdk
+import base64
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 
-# Import du module d'envoi d'email Brevo (fichier email_sender.py à côté de app.py)
+# Import du module d'envoi d'email Brevo (fichier email_sender.py a cote de app.py)
 from email_sender import send_estimation_email
 
-# Import du module d'ajout de membres Ghost (fichier ghost_sender.py à côté de app.py)
+# Import du module d'ajout de membres Ghost (fichier ghost_sender.py a cote de app.py)
 from ghost_sender import add_to_ghost
 
 # ===========================
@@ -32,6 +33,19 @@ MIN_PROGRESS_SECONDS = 5.2
 GARE_LON = 2.41767
 GARE_LAT = 49.38531
 BOOKING_URL = "https://hakimremax.youcanbook.me/"
+
+# Branding : images lues depuis le dossier assets/ puis encodees en base64.
+# Commit simplement assets/hakim-photo.jpg et assets/hakim-signature.png dans ton repo.
+def _img_b64(path: str) -> str:
+    try:
+        return base64.b64encode(Path(path).read_bytes()).decode()
+    except Exception:
+        return ""
+
+_photo_b64 = _img_b64("assets/hakim-photo.jpg")
+_sign_b64  = _img_b64("assets/hakim-signature.png")
+HAKIM_PHOTO_SRC = f"data:image/jpeg;base64,{_photo_b64}" if _photo_b64 else ""
+HAKIM_SIGN_SRC  = f"data:image/png;base64,{_sign_b64}"  if _sign_b64  else ""
 
 AREAS: Dict[str, Dict[str, str]] = {
     "Clermont-de-l'Oise":    {"city": "Clermont",             "postcode": "60600", "insee": "60157"},
@@ -58,7 +72,7 @@ DVF_CACHE_BUSTER = "v10"
 _defaults = {
     "geo": None, "result_payload": None,
     "area_name": AUTO_AREA, "area_locked": False, "detected_area": DEFAULT_AREA,
-    "bien_type": None, "surface": 0.0, "etat": None,
+    "bien_type": None, "surface": 0, "etat": None,
     "nb_pieces": 0, "nb_chambres": 0,
     "addr_typed": "", "addr_choice_display": "", "addr_choice": "",
     "prenom": "", "email": "", "consent": False,
@@ -82,12 +96,13 @@ st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap');
 
-/* ═══ RESET & BASE ═══════════════════════════════════════════════════ */
+/* RESET & BASE */
 html, body, [class*="stApp"] {{
     font-family: 'Poppins', sans-serif !important;
     font-size: 15px !important;
     background: #ffffff !important;
     color: #1e293b !important;
+    overflow-x: hidden !important;
 }}
 .main .block-container {{
     background: #ffffff !important;
@@ -96,7 +111,7 @@ html, body, [class*="stApp"] {{
 }}
 section[data-testid="stSidebar"] {{ display: none !important; }}
 
-/* Cache les éléments Streamlit Cloud (fork, menu, toolbar) */
+/* Cache les elements Streamlit Cloud (fork, menu, toolbar) */
 #MainMenu {{ display: none !important; }}
 header[data-testid="stHeader"] {{ display: none !important; }}
 footer {{ display: none !important; }}
@@ -108,11 +123,10 @@ footer[data-testid="stFooter"] {{ display: none !important; }}
 .stDeployButton {{ display: none !important; }}
 .viewerBadge_container__r5tak {{ display: none !important; }}
 .viewerBadge_link__qRIco {{ display: none !important; }}
-/* Sélecteurs génériques pour les badges et branding */
 a[href*="streamlit.io"] {{ display: none !important; }}
 a[href*="streamlit.app/cloud"] {{ display: none !important; }}
 
-/* ═══ TYPOGRAPHIE ═════════════════════════════════════════════════════ */
+/* TYPOGRAPHIE */
 h2 {{
     font-family: 'Poppins', sans-serif !important;
     color: {PRIMARY} !important;
@@ -130,7 +144,7 @@ h3 {{
 }}
 p, li, span, label, div {{ color: #334155 !important; }}
 
-/* ═══ CARD INFO (colonne gauche) ═════════════════════════════════════ */
+/* CARD INFO (colonne gauche) */
 .info-card {{
     background: linear-gradient(145deg, {ACCENT} 0%, #e8635d 100%);
     border-radius: 24px;
@@ -177,7 +191,6 @@ p, li, span, label, div {{ color: #334155 !important; }}
     font-size: 0.85rem !important;
     margin-top: 1px;
 }}
-/* Force blanc sur TOUS les enfants de info-card contre le sélecteur global */
 .info-card p, .info-card li, .info-card span, .info-card div {{
     color: white !important;
 }}
@@ -194,7 +207,55 @@ p, li, span, label, div {{ color: #334155 !important; }}
 .info-note b {{ color: {PRIMARY} !important; font-weight: 700 !important; }}
 .info-note span {{ color: #334155 !important; font-weight: 500 !important; }}
 
-/* ═══ FORM WRAPPER (colonne droite) ══════════════════════════════════ */
+/* CARTE HAKIM (branding / reassurance) */
+.hakim-card {{
+    background: white;
+    border-radius: 20px;
+    padding: 1.3rem 1.4rem;
+    margin-top: 0.8rem;
+    box-shadow: 0 4px 16px rgba(6,57,112,0.08);
+    border: 1.5px solid #f1f5f9;
+}}
+.hakim-top {{
+    display: flex; align-items: center; gap: 0.9rem;
+    margin-bottom: 0.85rem;
+}}
+.hakim-photo {{
+    width: 66px; height: 66px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 3px solid {ACCENT};
+    box-shadow: 0 4px 12px rgba(255,126,121,0.30);
+}}
+.hakim-name {{
+    font-family: 'Poppins', sans-serif !important;
+    font-weight: 800 !important;
+    font-size: 1.12rem !important;
+    color: {PRIMARY} !important;
+    margin: 0 !important;
+    line-height: 1.2;
+}}
+.hakim-role {{
+    font-size: 0.82rem !important;
+    color: #94a3b8 !important;
+    margin: 0.12rem 0 0 !important;
+    font-weight: 600 !important;
+}}
+.hakim-words {{
+    font-size: 0.93rem !important;
+    color: #334155 !important;
+    line-height: 1.6 !important;
+    margin: 0 0 0.7rem !important;
+    font-weight: 500 !important;
+}}
+.hakim-sign {{
+    height: 50px; width: auto;
+    display: block;
+    opacity: 0.92;
+}}
+
+/* FORM WRAPPER (colonne droite) */
 .form-wrapper {{
     background: white;
     border-radius: 28px;
@@ -206,7 +267,7 @@ p, li, span, label, div {{ color: #334155 !important; }}
 }}
 .form-wrapper::before, .form-wrapper::after {{ display: none; }}
 
-/* ═══ SECTION PILLS ══════════════════════════════════════════════════ */
+/* SECTION PILLS */
 .section-pill {{
     display: inline-flex; align-items: center; gap: 0.55rem;
     background: #eff6ff;
@@ -221,7 +282,7 @@ p, li, span, label, div {{ color: #334155 !important; }}
     margin-bottom: 0.9rem;
 }}
 
-/* ═══ LABELS ═════════════════════════════════════════════════════════ */
+/* LABELS */
 [data-testid="stTextInput"] label,
 [data-testid="stNumberInput"] label,
 [data-testid="stSelectbox"] label {{
@@ -233,8 +294,7 @@ p, li, span, label, div {{ color: #334155 !important; }}
     margin-bottom: 0.25rem !important;
 }}
 
-/* ═══ INPUT TEXT ═════════════════════════════════════════════════════ */
-/* Neutralise TOUTES les bordures natives BaseWeb/Streamlit */
+/* INPUT TEXT */
 [data-testid="stTextInput"] > div,
 [data-testid="stTextInput"] > div > div,
 [data-testid="stTextInput"] > div > div > div,
@@ -272,7 +332,7 @@ p, li, span, label, div {{ color: #334155 !important; }}
     font-weight: 400 !important;
 }}
 
-/* ═══ NUMBER INPUT ═══════════════════════════════════════════════════ */
+/* NUMBER INPUT */
 [data-testid="stNumberInput"] > div {{
     background: #f8fafc !important;
     border: 2px solid #e2e8f0 !important;
@@ -332,7 +392,7 @@ p, li, span, label, div {{ color: #334155 !important; }}
     box-shadow: 0 2px 8px rgba(255,126,121,0.25) !important;
 }}
 
-/* ═══ SELECTBOX ══════════════════════════════════════════════════════ */
+/* SELECTBOX */
 [data-testid="stSelectbox"] > div > div {{
     background: #f8fafc !important;
     border: 2px solid #e2e8f0 !important;
@@ -372,7 +432,7 @@ p, li, span, label, div {{ color: #334155 !important; }}
     pointer-events: none !important;
 }}
 
-/* ═══ ANTI-CLIP — empêche Streamlit de couper les champs ═════════════ */
+/* ANTI-CLIP */
 [data-testid="stTextInput"],
 [data-testid="stSelectbox"],
 [data-testid="stNumberInput"],
@@ -382,7 +442,7 @@ p, li, span, label, div {{ color: #334155 !important; }}
     overflow: visible !important;
 }}
 
-/* ═══ CHECKBOX ═══════════════════════════════════════════════════════ */
+/* CHECKBOX */
 [data-testid="stCheckbox"] {{
     background: #f8fafc;
     border: 2px solid #e2e8f0;
@@ -400,7 +460,6 @@ p, li, span, label, div {{ color: #334155 !important; }}
     line-height: 1.55 !important;
     font-weight: 500 !important;
 }}
-/* Supprime TOUT fond sur le label et ses enfants, dans tous les états */
 [data-baseweb="checkbox"] > div:last-child,
 [data-baseweb="checkbox"] > div:last-child *,
 [data-baseweb="checkbox"] label,
@@ -408,24 +467,23 @@ p, li, span, label, div {{ color: #334155 !important; }}
     background: transparent !important;
     background-color: transparent !important;
 }}
-/* Carré cochable uniquement */
 [data-testid="stCheckbox"] input:checked + div {{
     background: {ACCENT} !important;
     border-color: {ACCENT} !important;
 }}
 
-/* ═══ ALIGNEMENT COLONNES CARACTÉRISTIQUES ═══════════════════════════ */
+/* ALIGNEMENT COLONNES CARACTERISTIQUES */
 [data-testid="stSelectbox"] > div > div,
 [data-testid="stNumberInput"] > div {{
     min-height: 58px !important;
 }}
 
-/* ═══ ESPACEMENT CHAMPS CONTACT ══════════════════════════════════════ */
+/* ESPACEMENT CHAMPS CONTACT */
 [data-testid="stTextInput"] {{
     margin-bottom: 0.6rem !important;
 }}
 
-/* ═══ CTA BUTTON ═════════════════════════════════════════════════════ */
+/* CTA BUTTON */
 .stButton > button {{
     width: 100% !important;
     min-height: 72px !important;
@@ -461,14 +519,14 @@ p, li, span, label, div {{ color: #334155 !important; }}
     color: #94a3b8 !important;
 }}
 
-/* ═══ SÉPARATEUR ═════════════════════════════════════════════════════ */
+/* SEPARATEUR */
 .form-sep {{
     border: none;
     border-top: 2px dashed #f1f5f9;
     margin: 1.3rem 0 1rem;
 }}
 
-/* ═══ HELPER ADRESSE ═════════════════════════════════════════════════ */
+/* HELPER ADRESSE */
 .addr-helper {{
     font-size: 0.82rem !important;
     color: #94a3b8 !important;
@@ -478,20 +536,27 @@ p, li, span, label, div {{ color: #334155 !important; }}
     font-weight: 600 !important;
 }}
 
-/* ═══ STATUT FORMULAIRE ══════════════════════════════════════════════ */
-.form-status {{
-    text-align: center;
-    font-size: 0.86rem !important;
-    color: #94a3b8 !important;
-    font-weight: 700 !important;
-    margin-top: 0.5rem;
-    padding: 0.4rem;
+/* STATUT FORMULAIRE (barre de progression) */
+.ico-progress-track {{
+    background: #f1f5f9;
+    border-radius: 999px;
+    height: 12px;
+    overflow: hidden;
 }}
-.form-status.ready {{
-    color: #22c55e !important;
+.ico-progress-fill {{
+    height: 12px;
+    border-radius: 999px;
+    transition: width 0.45s cubic-bezier(.34,1.56,.64,1);
+}}
+.ico-progress-msg {{
+    text-align: center;
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 0.92rem !important;
+    font-weight: 700 !important;
+    margin: 0.55rem 0 0 !important;
 }}
 
-/* ═══ MÉTRIQUES RÉSULTATS ════════════════════════════════════════════ */
+/* METRIQUES RESULTATS */
 .result-metric {{
     background: linear-gradient(135deg, #063970, #0a5cb8);
     border-radius: 20px;
@@ -517,7 +582,7 @@ p, li, span, label, div {{ color: #334155 !important; }}
     letter-spacing: -0.02em;
 }}
 
-/* ═══ CARD RÉSULTATS ═════════════════════════════════════════════════ */
+/* CARD RESULTATS */
 .result-card {{
     background: white;
     border-radius: 18px;
@@ -528,7 +593,7 @@ p, li, span, label, div {{ color: #334155 !important; }}
 }}
 .result-card b {{ color: #334155 !important; font-weight: 800 !important; }}
 
-/* ═══ TENSION BOX ════════════════════════════════════════════════════ */
+/* TENSION BOX */
 .tension-box {{
     background: #fff7f7;
     border-left: 4px solid {ACCENT};
@@ -540,7 +605,7 @@ p, li, span, label, div {{ color: #334155 !important; }}
     color: #334155 !important;
 }}
 
-/* ═══ DISCLAIMER LIST ════════════════════════════════════════════════ */
+/* DISCLAIMER LIST */
 .disclaimer-list {{
     list-style: none; padding: 0; margin: 0.7rem 0 1rem;
 }}
@@ -557,7 +622,7 @@ p, li, span, label, div {{ color: #334155 !important; }}
     font-weight: 900; flex-shrink: 0;
 }}
 
-/* ═══ BOUTON RDV ═════════════════════════════════════════════════════ */
+/* BOUTON RDV */
 .booking-btn a {{
     display: block; text-align: center;
     background: {ACCENT};
@@ -581,14 +646,14 @@ p, li, span, label, div {{ color: #334155 !important; }}
     background: #ff6b65;
 }}
 
-/* ═══ HR ═════════════════════════════════════════════════════════════ */
+/* HR */
 hr {{
     border: none;
     border-top: 2px dashed #e2e8f0;
     margin: 1.5rem 0;
 }}
 
-/* ═══ ALERTS ═════════════════════════════════════════════════════════ */
+/* ALERTS */
 [data-testid="stAlert"] {{
     background: #f0fdf4 !important;
     border: 2px solid #bbf7d0 !important;
@@ -596,7 +661,7 @@ hr {{
     color: #16a34a !important;
 }}
 
-/* ═══ EXPANDER ═══════════════════════════════════════════════════════ */
+/* EXPANDER */
 [data-testid="stExpander"] {{
     background: white !important;
     border: 2px solid #f1f5f9 !important;
@@ -609,7 +674,7 @@ hr {{
     font-weight: 700 !important;
 }}
 
-/* ═══ MAP ════════════════════════════════════════════════════════════ */
+/* MAP */
 [data-testid="stDeckGlJsonChart"], iframe {{
     border-radius: 20px !important;
     overflow: hidden;
@@ -617,18 +682,48 @@ hr {{
     box-shadow: 0 4px 16px rgba(6,57,112,0.07) !important;
 }}
 
-/* ═══ CAPTIONS ═══════════════════════════════════════════════════════ */
+/* CAPTIONS */
 [data-testid="stCaptionContainer"] p {{
     color: #94a3b8 !important;
     font-size: 0.82rem !important;
     font-weight: 600 !important;
 }}
 
-/* ═══ SCROLLBAR ══════════════════════════════════════════════════════ */
+/* SCROLLBAR */
 ::-webkit-scrollbar {{ width: 6px; }}
 ::-webkit-scrollbar-track {{ background: #f1f5f9; }}
 ::-webkit-scrollbar-thumb {{ background: rgba(6,57,112,0.15); border-radius: 3px; }}
 ::-webkit-scrollbar-thumb:hover {{ background: {ACCENT}; }}
+
+/* MOBILE, anti-debordement horizontal */
+@media (max-width: 640px) {{
+    html, body, [class*="stApp"], .main, .main .block-container {{
+        overflow-x: hidden !important;
+        max-width: 100% !important;
+    }}
+    .main .block-container {{
+        padding-left: 0.7rem !important;
+        padding-right: 0.7rem !important;
+    }}
+    [data-testid="stHorizontalBlock"] {{
+        flex-wrap: wrap !important;
+        gap: 0.5rem !important;
+    }}
+    [data-testid="stHorizontalBlock"] > [data-testid="column"],
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {{
+        flex: 1 1 100% !important;
+        min-width: 100% !important;
+        width: 100% !important;
+    }}
+    [data-testid="stTextInput"], [data-testid="stSelectbox"],
+    [data-testid="stNumberInput"], [data-testid="stNumberInput"] > div {{
+        max-width: 100% !important;
+        min-width: 0 !important;
+    }}
+    .info-card, .info-note, .hakim-card, .result-card, .result-metric, .tension-box {{
+        max-width: 100% !important;
+    }}
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -637,7 +732,7 @@ hr {{
 # Helpers
 # ===========================
 def norm(s: str) -> str:
-    return (s or "").strip().lower().replace("'", "'")
+    return (s or "").strip().lower().replace("\u2019", "'")
 
 def eur(x: float) -> str:
     return f"{x:,.0f} €".replace(",", "\u202f")
@@ -699,7 +794,7 @@ def quartier_from_distance(distance_m: float) -> str:
     return "Ouest (Neuf)"
 
 def normalize_type_local(x: Any) -> str:
-    s = str(x or "").strip().lower().replace("'", "'")
+    s = str(x or "").strip().lower().replace("\u2019", "'")
     if "appart" in s: return "Appartement"
     if "maison" in s: return "Maison"
     return "Autre"
@@ -712,7 +807,7 @@ def tension_context_message(tscore: int) -> str:
     elif tscore >= 28:
         return "🙂 <b>Le marché est équilibré.</b> Ni en surchauffe, ni en pause. Les biens bien présentés et correctement positionnés se vendent sans trop traîner."
     else:
-        return "📈 <b>Le marché est stable sur votre secteur.</b> Les transactions se font à un rythme posé — ce qui veut dire que le prix de départ et la présentation du bien sont les deux leviers les plus importants pour vendre dans de bonnes conditions."
+        return "📈 <b>Le marché est stable sur votre secteur.</b> Les transactions se font à un rythme posé, ce qui veut dire que le prix de départ et la présentation du bien sont les deux leviers les plus importants pour vendre dans de bonnes conditions."
 
 def is_form_ready() -> Tuple[bool, int]:
     checks = [
@@ -740,7 +835,7 @@ def add_to_kit(prenom: str, email: str, area: str, bien_type: str, surface: floa
         form_id = st.secrets.get("KIT_FORM_ID", "")
         if not api_key or not form_id:
             st.session_state["_kit_result"] = False
-            st.session_state["_kit_error"]  = f"Secrets manquants — api_key={'OK' if api_key else 'VIDE'}, form_id={'OK' if form_id else 'VIDE'}"
+            st.session_state["_kit_error"]  = f"Secrets manquants, api_key={'OK' if api_key else 'VIDE'}, form_id={'OK' if form_id else 'VIDE'}"
             return False
         url = f"https://api.convertkit.com/v3/forms/{form_id}/subscribe"
         payload = {
@@ -762,7 +857,7 @@ def add_to_kit(prenom: str, email: str, area: str, bien_type: str, surface: floa
         }
         r = requests.post(url, json=payload, timeout=10)
         st.session_state["_kit_result"]   = r.status_code in (200, 201)
-        st.session_state["_kit_response"] = f"Status {r.status_code} — {r.text[:400]}"
+        st.session_state["_kit_response"] = f"Status {r.status_code} : {r.text[:400]}"
         st.session_state["_kit_error"]    = "" if r.status_code in (200, 201) else r.text[:200]
         return r.status_code in (200, 201)
     except Exception as e:
@@ -834,7 +929,7 @@ def load_dvf_local(_bust: str = DVF_CACHE_BUSTER) -> pd.DataFrame:
         ("latitude",            lambda x: pd.to_numeric(x, errors="coerce")),
     ]:
         df[col] = fn(df.get(col))
-    # nb_pieces : on le rend numérique si présent, sinon on crée la colonne vide
+    # nb_pieces : on le rend numerique si present, sinon on cree la colonne vide
     if "nb_pieces" in df.columns:
         df["nb_pieces"] = pd.to_numeric(df["nb_pieces"], errors="coerce")
     else:
@@ -848,12 +943,12 @@ def load_dvf_local(_bust: str = DVF_CACHE_BUSTER) -> pd.DataFrame:
 
 def dvf_select_similaires_strict(df_all, lat, lon, bien_type, surface, nb_pieces=0) -> Tuple[pd.DataFrame, int, float, int]:
     """
-    Sélectionne les ventes comparables avec élargissement progressif sur 3 axes :
-      1. fenêtre temporelle : 12 mois, puis 18, puis 24 (on garde la donnée la plus fraîche possible)
-      2. rayon géographique : 600m → 3500m
-      3. surface : tolérances croissantes
-      4. nombre de pièces : ±1, puis ±2, puis ignoré (les ventes sans nb_pieces ne sont jamais exclues)
-    Retourne (df, rayon_utilisé, tolérance_surface_utilisée, fenêtre_mois_utilisée).
+    Selectionne les ventes comparables avec elargissement progressif sur 3 axes :
+      1. fenetre temporelle : 12 mois, puis 18, puis 24 (on garde la donnee la plus fraiche possible)
+      2. rayon geographique : 600m vers 3500m
+      3. surface : tolerances croissantes
+      4. nombre de pieces : +/-1, puis +/-2, puis ignore (les ventes sans nb_pieces ne sont jamais exclues)
+    Retourne (df, rayon_utilise, tolerance_surface_utilisee, fenetre_mois_utilisee).
     """
     if df_all.empty: return pd.DataFrame(), 0, 0.0, 0
     target_type = normalize_type_local(bien_type)
@@ -864,8 +959,8 @@ def dvf_select_similaires_strict(df_all, lat, lon, bien_type, surface, nb_pieces
     windows_months = [12, 18, 24]
     radii          = [600, 900, 1500, 2500, 3500]
     tolerances     = [0.20,0.25,0.30,0.35] if target_type=="Appartement" else [0.25,0.30,0.40,0.45]
-    # Tolérance sur le nb de pièces, du plus serré au plus large.
-    # None = on ignore complètement le critère (dernier filet de sécurité).
+    # Tolerance sur le nb de pieces, du plus serre au plus large.
+    # None = on ignore completement le critere (dernier filet de securite).
     pieces_tols    = [1, 2, None] if int(nb_pieces or 0) > 0 else [None]
     min_needed     = 4
 
@@ -896,8 +991,8 @@ def dvf_select_similaires_strict(df_all, lat, lon, bien_type, surface, nb_pieces
                 if df_s_base.empty: continue
                 for ptol in pieces_tols:
                     df_s = df_s_base.copy()
-                    # On ne filtre sur les pièces que si on a un nb cible ET que la donnée existe.
-                    # Les ventes sans nb_pieces (NaN) sont toujours conservées pour ne pas vider le marché.
+                    # On ne filtre sur les pieces que si on a un nb cible ET que la donnee existe.
+                    # Les ventes sans nb_pieces (NaN) sont toujours conservees pour ne pas vider le marche.
                     if ptol is not None and "nb_pieces" in df_s.columns:
                         p = pd.to_numeric(df_s["nb_pieces"], errors="coerce")
                         df_s = df_s[(p.isna()) | ((p >= nb_pieces - ptol) & (p <= nb_pieces + ptol))]
@@ -914,8 +1009,8 @@ def dvf_select_similaires_strict(df_all, lat, lon, bien_type, surface, nb_pieces
         if not best.empty: break
 
     if best.empty:
-        # Fallback ultime : sur 24 mois, on prend les 3 biens les plus proches répondant à la surface,
-        # sans contrainte de pièces ni de volume minimum.
+        # Fallback ultime : sur 24 mois, on prend les 3 biens les plus proches repondant a la surface,
+        # sans contrainte de pieces ni de volume minimum.
         df = df_all[df_all["date_mutation"] >= max_date - pd.Timedelta(days=int(24*30.4))].copy()
         if df.empty:
             return pd.DataFrame(), 0, 0.0, 0
@@ -954,34 +1049,33 @@ def market_tension_index(df_local: pd.DataFrame, used_radius: int, used_window: 
     n          = int(len(df_local))
     area_km2   = np.pi * (used_radius/1000.0)**2
 
-    # On ramène le nombre de ventes à un RYTHME ANNUEL équivalent.
-    # Sinon, élargir la fenêtre à 24 mois gonflerait artificiellement l'attractivité.
+    # On ramene le nombre de ventes a un RYTHME ANNUEL equivalent.
+    # Sinon, elargir la fenetre a 24 mois gonflerait artificiellement l'attractivite.
     win = max(1, int(used_window or 12))
     n_annual   = n * (12.0 / win)
     density    = n_annual / max(1e-6, area_km2)
 
-    # Score densité : calibré pour un petit marché (1-3/km²/an = normal, 5+/km²/an = actif)
-    # exp(-density/4) → 1/km² donne ~22pts, 3/km² ~53pts, 6/km² ~78pts
+    # Score densite : calibre pour un petit marche (1-3/km2/an = normal, 5+/km2/an = actif)
     s_density  = 100 * (1 - np.exp(-density / 4))
 
-    # Score fraîcheur : dernière vente < 90j = très bon, < 180j = correct
+    # Score fraicheur : derniere vente < 90j = tres bon, < 180j = correct
     last_date  = pd.to_datetime(df_local["date_mutation"]).max()
     days_since = int(max(0,(pd.Timestamp.utcnow().tz_localize(None)-pd.to_datetime(last_date).tz_localize(None)).days))
     s_recency  = 100 * np.exp(-days_since / 120)
 
-    # Score volume brut : bonus si plus de 4 ventes dans le rayon min (800m), ramené au rythme annuel
+    # Score volume brut : bonus si plus de 4 ventes dans le rayon min (800m), ramene au rythme annuel
     df_close   = df_local[df_local.get("distance_m", pd.Series([used_radius]*n)) <= 800] if "distance_m" in df_local.columns else df_local
     n_close_annual = len(df_close) * (12.0 / win)
     s_volume   = float(clamp(n_close_annual / 8 * 100, 0, 100))
 
-    # Score homogénéité prix (IQR faible = marché stable et lisible)
+    # Score homogeneite prix (IQR faible = marche stable et lisible)
     pm2 = pd.to_numeric(df_local.get("prix_m2"), errors="coerce").replace([np.inf,-np.inf], np.nan).dropna()
     iqr_ratio = 1.0
     if not pm2.empty:
         iqr_ratio = (float(pm2.quantile(0.75)) - float(pm2.quantile(0.25))) / max(1.0, float(pm2.median()))
     s_homo = 100 * np.exp(-iqr_ratio / 0.25)
 
-    # Score global pondéré
+    # Score global pondere
     score = float(clamp(
         0.40 * s_density + 0.30 * s_recency + 0.20 * s_volume + 0.10 * s_homo,
         0, 100))
@@ -990,7 +1084,7 @@ def market_tension_index(df_local: pd.DataFrame, used_radius: int, used_window: 
              else "🙂 Équilibré" if score >= 28 else "📈 Marché stable")
     detail_win = "" if win == 12 else f" · données sur {win} mois"
     return {"score": int(round(score)), "label": label,
-            "detail": f"Densité ~{density:.1f}/km²/an · Dernière vente {days_since}j · IQR ~{iqr_ratio:.2f}{detail_win}"}
+            "detail": f"Densité ~{density:.1f}/km2/an · Dernière vente {days_since}j · IQR ~{iqr_ratio:.2f}{detail_win}"}
 
 def compute_adjustments(bien_type, surface, nb_pieces, nb_chambres, etat, distance_m):
     etat_factor     = {"À rénover":0.88,"Moyen":1.00,"Bon":1.05,"Rénové":1.10}.get(etat, 1.00)
@@ -1079,36 +1173,34 @@ if DEBUG:
                 st.session_state["_dvf_bust_manual"] = str(time.time())
                 st.cache_data.clear(); st.rerun()
         api_key = st.secrets.get("KIT_API_KEY",""); form_id = st.secrets.get("KIT_FORM_ID","")
-        st.write(f"KIT_API_KEY : {'✅ ' + api_key[:6] + '...' if api_key else '❌ MANQUANTE'}")
-        st.write(f"KIT_FORM_ID : {'✅ ' + form_id if form_id else '❌ MANQUANT'}")
+        st.write(f"KIT_API_KEY : {'OK ' + api_key[:6] + '...' if api_key else 'MANQUANTE'}")
+        st.write(f"KIT_FORM_ID : {'OK ' + form_id if form_id else 'MANQUANT'}")
         if st.session_state.get("_kit_result") is not None:
-            st.write("Dernier envoi KIT :", "✅ OK" if st.session_state["_kit_result"] else "❌ Échec")
+            st.write("Dernier envoi KIT :", "OK" if st.session_state["_kit_result"] else "Échec")
         if st.session_state.get("_kit_error"):
             st.error(f"Erreur KIT : {st.session_state['_kit_error']}")
         if st.session_state.get("_kit_response"):
             st.write("Réponse KIT :", st.session_state["_kit_response"])
 
-        # === Debug Brevo (envoi d'email d'estimation) ===
         st.markdown("---")
         smtp_user = st.secrets.get("BREVO_SMTP_USER", "")
         smtp_pass = st.secrets.get("BREVO_SMTP_PASS", "")
         from_email = st.secrets.get("BREVO_FROM_EMAIL", "")
-        st.write(f"BREVO_SMTP_USER  : {'✅ ' + smtp_user if smtp_user else '❌ MANQUANT'}")
-        st.write(f"BREVO_SMTP_PASS  : {'✅ ****** (' + str(len(smtp_pass)) + ' caractères)' if smtp_pass else '❌ MANQUANT'}")
-        st.write(f"BREVO_FROM_EMAIL : {'✅ ' + from_email if from_email else '❌ MANQUANT'}")
+        st.write(f"BREVO_SMTP_USER  : {'OK ' + smtp_user if smtp_user else 'MANQUANT'}")
+        st.write(f"BREVO_SMTP_PASS  : {'OK (' + str(len(smtp_pass)) + ' caractères)' if smtp_pass else 'MANQUANT'}")
+        st.write(f"BREVO_FROM_EMAIL : {'OK ' + from_email if from_email else 'MANQUANT'}")
         if st.session_state.get("_brevo_result") is not None:
-            st.write("Dernier envoi Brevo :", "✅ OK" if st.session_state["_brevo_result"] else "❌ Échec")
+            st.write("Dernier envoi Brevo :", "OK" if st.session_state["_brevo_result"] else "Échec")
         if st.session_state.get("_brevo_error"):
             st.error(f"Erreur Brevo : {st.session_state['_brevo_error']}")
 
-        # === Debug Ghost (ajout du membre dans le blog) ===
         st.markdown("---")
         ghost_url = st.secrets.get("GHOST_ADMIN_URL", "")
         ghost_key = st.secrets.get("GHOST_ADMIN_KEY", "")
-        st.write(f"GHOST_ADMIN_URL : {'✅ ' + ghost_url if ghost_url else '❌ MANQUANT'}")
-        st.write(f"GHOST_ADMIN_KEY : {'✅ ****** (' + str(len(ghost_key)) + ' caractères)' if ghost_key else '❌ MANQUANTE'}")
+        st.write(f"GHOST_ADMIN_URL : {'OK ' + ghost_url if ghost_url else 'MANQUANT'}")
+        st.write(f"GHOST_ADMIN_KEY : {'OK (' + str(len(ghost_key)) + ' caractères)' if ghost_key else 'MANQUANTE'}")
         if st.session_state.get("_ghost_result") is not None:
-            st.write("Dernier ajout Ghost :", "✅ OK" if st.session_state["_ghost_result"] else "❌ Échec")
+            st.write("Dernier ajout Ghost :", "OK" if st.session_state["_ghost_result"] else "Échec")
         if st.session_state.get("_ghost_error"):
             st.error(f"Erreur Ghost : {st.session_state['_ghost_error']}")
         if st.session_state.get("_ghost_response"):
@@ -1120,7 +1212,7 @@ if DEBUG:
 # ===========================
 colInfo, colForm = st.columns([0.88, 1.28], gap="large")
 
-# ── Colonne Info ─────────────────────────────────────────────────────
+# Colonne Info
 with colInfo:
     st.markdown("""
     <div class="info-card">
@@ -1128,7 +1220,7 @@ with colInfo:
       <ul>
         <li><span class="check">✓</span> Une fourchette de prix réaliste, basée sur les ventes récentes de votre secteur</li>
         <li><span class="check">✓</span> Le prix médian au m² pratiqué dans votre quartier ces 12 derniers mois</li>
-        <li><span class="check">✓</span> Des biens comparables au vôtre : même type, surface similaire, même zone</li>
+        <li><span class="check">✓</span> Des biens comparables au vôtre, même type, surface similaire, même zone</li>
         <li><span class="check">✓</span> Un indice d'attractivité de votre secteur (est-ce que les biens partent vite ?)</li>
         <li><span class="check">✓</span> Une estimation affinée selon l'état, la surface, les pièces et la localisation</li>
       </ul>
@@ -1143,7 +1235,22 @@ with colInfo:
     </div>
     """, unsafe_allow_html=True)
 
-# ── Colonne Formulaire ───────────────────────────────────────────────
+    # Carte Hakim (branding + reassurance)
+    st.markdown(f"""
+    <div class="hakim-card">
+      <div class="hakim-top">
+        <img class="hakim-photo" src="{HAKIM_PHOTO_SRC}" alt="Hakim Saber" />
+        <div>
+          <p class="hakim-name">Hakim Saber</p>
+          <p class="hakim-role">Conseiller immobilier, Clermont-de-l'Oise</p>
+        </div>
+      </div>
+      <p class="hakim-words">Derrière cette estimation, il y a moi. Pas un algorithme anonyme qui n'a jamais mis les pieds dans le coin. Vos infos restent chez moi, et je vous recontacte seulement si vous le voulez.</p>
+      <img class="hakim-sign" src="{HAKIM_SIGN_SRC}" alt="Signature Hakim Saber" />
+    </div>
+    """, unsafe_allow_html=True)
+
+# Colonne Formulaire
 with colForm:
     st.markdown("<h2 style='font-family:Poppins,sans-serif;color:#063970;font-size:1.85rem;font-weight:800;margin:0 0 1rem;letter-spacing:-0.02em;line-height:1.15'>Parlez-moi de votre bien</h2>", unsafe_allow_html=True)
 
@@ -1160,8 +1267,8 @@ with colForm:
     effective_area, ai = get_effective_area()
 
     # Adresse
-    st.text_input("", placeholder="🏠  Adresse du bien — ex : 5 Rue de la République", key="addr_typed")
-    st.markdown("<div class='addr-helper'>📍 App 100% locale — seules les adresses de Clermont-de-l'Oise et ses communes voisines sont disponibles.</div>",
+    st.text_input("", placeholder="🏠  Adresse du bien, ex : 5 Rue de la République", key="addr_typed")
+    st.markdown("<div class='addr-helper'>📍 App 100% locale, seules les adresses de Clermont-de-l'Oise et ses communes voisines sont disponibles.</div>",
                 unsafe_allow_html=True)
 
     typed = (st.session_state.addr_typed or "").strip()
@@ -1201,7 +1308,7 @@ with colForm:
                      key="addr_choice_display", on_change=on_addr_choice_display_change,
                      label_visibility="collapsed")
     elif len(typed) >= 2:
-        st.caption("Aucune adresse trouvée — vérifiez l'orthographe.")
+        st.caption("Aucune adresse trouvée, vérifiez l'orthographe.")
         st.session_state.addr_choice_display = ""
         st.session_state.addr_choice         = ""
     else:
@@ -1210,17 +1317,17 @@ with colForm:
 
     st.markdown("<hr class='form-sep'/>", unsafe_allow_html=True)
 
-    # Caractéristiques — grille unique 2 colonnes sans espacement entre blocs
+    # Caracteristiques
     st.markdown("<span class='section-pill'>🏡 Caractéristiques</span>", unsafe_allow_html=True)
 
     # Ligne 1 : Type de bien (pleine largeur)
     st.selectbox("Type de bien", ["Maison", "Appartement"], index=None, key="bien_type", placeholder="Maison ou Appartement ?")
 
-    # Ligne 2+3 : tous les champs dans un seul appel st.columns pour éviter les éléments inter-lignes
+    # Ligne 2+3
     ca, cb = st.columns(2)
     with ca:
-        st.number_input("Surface (m²)", min_value=0.0, max_value=500.0, step=1.0,
-                        value=float(st.session_state.surface or 0.0), key="surface")
+        st.number_input("Surface (m²)", min_value=0, max_value=500, step=1,
+                        value=int(st.session_state.surface or 0), key="surface")
         st.selectbox("État général", ["À rénover", "Moyen", "Bon", "Rénové"],
                      index=None, key="etat", placeholder="État du bien…")
         st.markdown(
@@ -1235,7 +1342,7 @@ with colForm:
 
     st.markdown("<hr class='form-sep'/>", unsafe_allow_html=True)
 
-    # Coordonnées
+    # Coordonnees
     st.markdown("<span class='section-pill'>✉️ Recevoir l'estimation</span>", unsafe_allow_html=True)
     cc1, cc2 = st.columns(2)
     with cc1:
@@ -1248,7 +1355,7 @@ with colForm:
         "Pas de spam, pas de relance tous les matins. Promis 🙂",
         key="consent",
     )
-    # MutationObserver ciblé : efface le background inline du label BaseWeb + autocomplete off sur number inputs
+    # MutationObserver cible : efface le background inline du label BaseWeb + autocomplete off sur number inputs
     st.components.v1.html("""
     <script>
     (function() {
@@ -1269,12 +1376,10 @@ with colForm:
                 inp.setAttribute('list', 'autocompleteOff');
                 inp.setAttribute('name', 'search_' + Math.random());
             });
-            // Cache les instructions / popovers natifs
             root.querySelectorAll('[data-testid="InputInstructions"]').forEach(function(el) {
                 el.style.setProperty('display', 'none', 'important');
             });
         }
-        // Observer dédié pour tuer InputInstructions dès qu'il apparaît dans le DOM
         function watchInputInstructions() {
             var root = window.parent.document.body;
             if (!root) { setTimeout(watchInputInstructions, 200); return; }
@@ -1282,11 +1387,9 @@ with colForm:
                 mutations.forEach(function(m) {
                     m.addedNodes.forEach(function(node) {
                         if (node.nodeType !== 1) return;
-                        // Ciblage direct
                         if (node.dataset && node.dataset.testid === 'InputInstructions') {
                             node.style.setProperty('display', 'none', 'important');
                         }
-                        // Ciblage dans les enfants
                         node.querySelectorAll && node.querySelectorAll('[data-testid="InputInstructions"]').forEach(function(el) {
                             el.style.setProperty('display', 'none', 'important');
                         });
@@ -1296,20 +1399,16 @@ with colForm:
         }
         watchInputInstructions();
 
-        // Observer dédié pour tuer le footer Streamlit Cloud (badge, pub, "created by")
         function killStreamlitBranding() {
             var doc = window.parent.document;
             if (!doc || !doc.body) { setTimeout(killStreamlitBranding, 300); return; }
             function nuke() {
-                // Footer entier
                 doc.querySelectorAll('footer, [data-testid="stBottom"], [data-testid="stFooter"]').forEach(function(el) {
                     el.style.setProperty('display', 'none', 'important');
                 });
-                // Badge "Created by" et liens Streamlit
                 doc.querySelectorAll('a[href*="streamlit.io"], a[href*="streamlit.app/cloud"], .viewerBadge_container__r5tak, .viewerBadge_link__qRIco').forEach(function(el) {
                     el.style.setProperty('display', 'none', 'important');
                 });
-                // Tout élément contenant "Streamlit" ou "shaggy" dans le texte visible
                 doc.querySelectorAll('span, p, div, a').forEach(function(el) {
                     if (el.children.length === 0 && el.innerText && (
                         el.innerText.toLowerCase().includes('streamlit') ||
@@ -1338,7 +1437,6 @@ with colForm:
         }
         attachObservers();
 
-        // Bloque le scroll zoom sur la carte pydeck
         function blockMapScroll() {
             var root = window.parent.document;
             var canvases = root.querySelectorAll('canvas');
@@ -1348,7 +1446,6 @@ with colForm:
                     e.preventDefault();
                 }, { passive: false });
             });
-            // Observer pour les canvas ajoutés après coup
             new MutationObserver(function() {
                 root.querySelectorAll('canvas').forEach(function(el) {
                     if (!el._scrollBlocked) {
@@ -1368,21 +1465,32 @@ with colForm:
 
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
 
-    # CTA
+    # Barre de progression (on motive vers la fin, on ne decourage pas au depart)
     ready, filled_count = is_form_ready()
+    total_fields = 8
+    remaining    = total_fields - filled_count
+    pct          = 100 if ready else int(round(filled_count / total_fields * 100))
+
+    if ready:
+        prog_msg, prog_color = "C'est tout bon, lancez l'estimation 🚀", "#22c55e"
+    elif remaining == 1:
+        prog_msg, prog_color = "Plus qu'une info et votre estimation s'affiche 🙂", "#FF7E79"
+    else:
+        prog_msg, prog_color = f"Plus que {remaining} infos et votre estimation s'affiche.", "#FF7E79"
+
+    st.markdown(f"""
+<div style="margin-bottom:0.9rem;">
+  <div class="ico-progress-track">
+    <div class="ico-progress-fill" style="width:{pct}%; background:{prog_color};"></div>
+  </div>
+  <p class="ico-progress-msg" style="color:{prog_color};">{prog_msg}</p>
+</div>
+""", unsafe_allow_html=True)
+
+    # CTA
     submitted = st.button("✨  Voir l'estimation de mon bien →", disabled=not ready, use_container_width=True)
 
-    if not ready:
-        remaining = 8 - filled_count
-        st.markdown(
-            f"<div class='form-status'>Il reste {remaining} champ{'s' if remaining>1 else ''} à remplir.</div>",
-            unsafe_allow_html=True)
-    else:
-        st.markdown(
-            "<div class='form-status ready'>✅ Tout est renseigné — cliquez pour lancer l'estimation !</div>",
-            unsafe_allow_html=True)
-
-    # ── Traitement ───────────────────────────────────────────────────
+    # Traitement
     if submitted:
         effective_area, ai = get_effective_area()
         geo_map   = st.session_state.get("_suggestion_geo_map", {})
@@ -1480,7 +1588,7 @@ with colForm:
                 adresse=str(geo.get("label", ""))
             )
 
-            # === Envoi de l'email d'estimation via Brevo SMTP ===
+            # Envoi de l'email d'estimation via Brevo SMTP
             send_estimation_email(
                 to_email=st.session_state.email,
                 prenom=st.session_state.prenom,
@@ -1494,11 +1602,11 @@ with colForm:
                 attractivite=f"{payload.get('tension', {}).get('label', '')} ({int(payload.get('tension', {}).get('score', 0))}/100)",
             )
 
-            # === Ajout du contact dans Ghost (membres du blog) ===
+            # Ajout du contact dans Ghost (membres du blog)
             add_to_ghost(
                 email=st.session_state.email,
                 prenom=st.session_state.prenom,
-                note=f"Estimation : {geo.get('label', '')} — {st.session_state.bien_type} {int(float(st.session_state.surface))}m²",
+                note=f"Estimation : {geo.get('label', '')}, {st.session_state.bien_type} {int(float(st.session_state.surface))}m²",
             )
         finally:
             prog_slot.empty()
@@ -1508,14 +1616,13 @@ with colForm:
 
 
 # ===========================
-# RÉSULTATS
+# RESULTATS
 # ===========================
 if st.session_state.result_payload and st.session_state.geo:
-    # Signale à la page parente (Carrd) d'agrandir l'iframe
+    # Signale a la page parente d'agrandir l'iframe
     st.components.v1.html("""
     <script>
     try {
-        // window.parent = iframe Streamlit, window.parent.parent = page Carrd
         var target = window.parent && window.parent.parent ? window.parent.parent : window.parent;
         target.postMessage({ type: "icostim:resultsReady" }, "*");
     } catch(e) {}
@@ -1541,7 +1648,7 @@ if st.session_state.result_payload and st.session_state.geo:
         st.markdown(f"<div class='result-metric'><p class='mk'>Attractivité du secteur</p>"
                     f"<p class='mv'>{tens.get('label','—')} ({tscore}/100)</p></div>", unsafe_allow_html=True)
 
-    # Mention discrète si l'estimation s'appuie sur une fenêtre élargie (> 12 mois)
+    # Mention discrete si l'estimation s'appuie sur une fenetre elargie (> 12 mois)
     _uw = int(hp.get("used_window", 0) or 0)
     _window_note = ""
     if _uw > 12:
@@ -1552,9 +1659,9 @@ if st.session_state.result_payload and st.session_state.geo:
     st.markdown(
         f"<div class='result-card'>"
         f"<b>Adresse analysée :</b> {geo.get('label','')}<br/>"
-        f"<b>Zone (proxy) :</b> {hp.get('quartier','—')} — <b>Distance gare :</b> {hp.get('distance_gare_m','—')} m<br/>"
+        f"<b>Zone (proxy) :</b> {hp.get('quartier','—')}, <b>Distance gare :</b> {hp.get('distance_gare_m','—')} m<br/>"
         f"<b>Prix médian au m² :</b> ~{eur(hp.get('pm2_med',0))} / m²<br/>"
-        f"<b>Biens comparables :</b> {hp.get('n',0)} ventes — rayon max : {hp.get('used_radius','—')} m"
+        f"<b>Biens comparables :</b> {hp.get('n',0)} ventes, rayon max : {hp.get('used_radius','—')} m"
         f"{_window_note}"
         f"</div>", unsafe_allow_html=True)
 
@@ -1567,7 +1674,6 @@ if st.session_state.result_payload and st.session_state.geo:
             unsafe_allow_html=True)
         st.caption("Position légèrement floue pour respecter la vie privée des vendeurs.")
 
-        # Layer comparables : saumon translucide
         comp_data = [{"lat": float(p["lat"]), "lon": float(p["lon"])} for p in map_points]
         layer_comp = pdk.Layer(
             "ScatterplotLayer",
@@ -1577,7 +1683,6 @@ if st.session_state.result_payload and st.session_state.geo:
             get_radius=60,
             pickable=False)
 
-        # Layer bien estimé : point bleu plein petit et précis
         bien_data = [{"lat": float(geo["lat"]), "lon": float(geo["lon"])}]
         layer_bien = pdk.Layer(
             "ScatterplotLayer",
@@ -1603,13 +1708,11 @@ if st.session_state.result_payload and st.session_state.geo:
             tooltip=False),
             use_container_width=True)
 
-        # Bloque le scroll zoom en ciblant l'iframe pydeck depuis le parent
         st.components.v1.html("""
         <script>
         (function() {
             function blockScroll() {
                 var parent = window.parent.document;
-                // Cible tous les iframes qui contiennent un canvas (= pydeck)
                 parent.querySelectorAll('iframe').forEach(function(iframe) {
                     try {
                         var doc = iframe.contentDocument || iframe.contentWindow.document;
@@ -1625,7 +1728,6 @@ if st.session_state.result_payload and st.session_state.geo:
                     } catch(e) {}
                 });
             }
-            // Plusieurs tentatives pour attraper la carte après chargement
             [500, 1000, 2000, 3500].forEach(function(d) {
                 setTimeout(blockScroll, d);
             });
@@ -1659,7 +1761,7 @@ if st.session_state.result_payload and st.session_state.geo:
     st.markdown("<br/>", unsafe_allow_html=True)
     st.markdown(
         f"<div class='booking-btn'><a href='{BOOKING_URL}' target='_blank'>"
-        f"📞 Affiner cette estimation avec Hakim — RDV gratuit, sans engagement"
+        f"📞 Affiner cette estimation avec Hakim, RDV gratuit, sans engagement"
         f"</a></div>", unsafe_allow_html=True)
     st.caption("Un échange téléphonique de 20 minutes pour un chiffre précis et des conseils pour valoriser votre bien.")
 

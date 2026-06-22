@@ -1361,8 +1361,8 @@ with colForm:
         st.text_input("", key="email", placeholder="✉️  Votre email")
 
     st.checkbox(
-        "J'accepte de recevoir cette estimation par email et qu'Hakim me contacte pour l'affiner si besoin. "
-        "Pas de spam, pas de relance tous les matins. Promis 🙂",
+        "J'accepte de recevoir mon estimation par email. "
+        "Vos données sont en sécurité, pas de spam ni de relance quotidienne, promis 🙂",
         key="consent",
     )
     # MutationObserver cible : efface le background inline du label BaseWeb + autocomplete off sur number inputs

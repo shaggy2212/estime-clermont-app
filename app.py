@@ -1792,32 +1792,46 @@ if st.session_state.result_payload and st.session_state.geo:
 
 
 # ===========================
-# Hauteur dynamique vers la page parente (Ghost)
-# Supprime le scroll interne : l'iframe se cale pile sur le contenu.
+# Hauteur dynamique → Ghost
+# L'app mesure sa vraie hauteur et l'envoie à Ghost (un seul bloc, filtré anti-tremblement).
 # ===========================
 st.components.v1.html("""
 <script>
-(function(){
-  var appDoc, ghost;
-  try { appDoc = window.parent.document; } catch(e){ return; }
-  try { ghost = window.parent.parent || window.parent; } catch(e){ ghost = window.parent; }
-  var last = 0;
-  function measure(){
-    try{
-      var h = Math.max(
-        appDoc.body ? appDoc.body.scrollHeight : 0,
-        appDoc.documentElement ? appDoc.documentElement.scrollHeight : 0
-      );
-      if (h && Math.abs(h - last) > 4){
-        last = h;
-        ghost.postMessage({type:"icostim:height", height:h}, "*");
-      }
-    }catch(e){}
-  }
-  measure();
-  try { new ResizeObserver(measure).observe(appDoc.body); } catch(e){}
-  setInterval(measure, 800);
-  window.addEventListener("resize", measure);
+(function() {
+    var streamlitDoc = window.parent.document;
+    var ghostWindow = window.parent.parent || window.parent;
+    var last = 0;
+
+    function sendHeight() {
+        try {
+            var body = streamlitDoc.body;
+            var html = streamlitDoc.documentElement;
+            var h = Math.max(
+                body.scrollHeight, body.offsetHeight,
+                html.clientHeight, html.scrollHeight, html.offsetHeight
+            );
+            // N'envoie que si la hauteur a vraiment changé (évite les tremblements)
+            if (h && Math.abs(h - last) > 8) {
+                last = h;
+                ghostWindow.postMessage({ type: "icostim:height", height: h }, "*");
+            }
+        } catch(e) {}
+    }
+
+    sendHeight();
+    [100, 400, 800, 1500, 3000].forEach(function(ms) {
+        setTimeout(sendHeight, ms);
+    });
+
+    try {
+        var ro = new ResizeObserver(function() { sendHeight(); });
+        ro.observe(streamlitDoc.body);
+    } catch(e) {}
+
+    try {
+        var mo = new MutationObserver(function() { sendHeight(); });
+        mo.observe(streamlitDoc.body, { childList: true, subtree: true, attributes: true });
+    } catch(e) {}
 })();
 </script>
 """, height=0)

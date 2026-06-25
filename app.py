@@ -1793,14 +1793,21 @@ if st.session_state.result_payload and st.session_state.geo:
 
 # ===========================
 # Hauteur dynamique → Ghost
-# L'app mesure sa vraie hauteur et l'envoie à Ghost (un seul bloc, filtré anti-tremblement).
+# L'app mesure sa vraie hauteur et l'envoie à TOUS les niveaux parents.
+# (un seul est le bon, Ghost ; les autres ignorent. Évite de deviner le parent.)
 # ===========================
 st.components.v1.html("""
 <script>
 (function() {
     var streamlitDoc = window.parent.document;
-    var ghostWindow = window.parent.parent || window.parent;
     var last = 0;
+
+    function broadcast(h) {
+        var msg = { type: "icostim:height", height: h };
+        try { window.parent.postMessage(msg, "*"); } catch(e) {}
+        try { window.parent.parent.postMessage(msg, "*"); } catch(e) {}
+        try { window.top.postMessage(msg, "*"); } catch(e) {}
+    }
 
     function sendHeight() {
         try {
@@ -1813,7 +1820,7 @@ st.components.v1.html("""
             // N'envoie que si la hauteur a vraiment changé (évite les tremblements)
             if (h && Math.abs(h - last) > 8) {
                 last = h;
-                ghostWindow.postMessage({ type: "icostim:height", height: h }, "*");
+                broadcast(h);
             }
         } catch(e) {}
     }

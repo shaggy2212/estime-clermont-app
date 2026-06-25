@@ -1833,8 +1833,30 @@ st.components.v1.html("""
               || streamlitDoc.querySelector('section.main');
         if (!el) return 0;
         var rect = el.getBoundingClientRect();
-        // hauteur réelle du contenu + un petit padding bas FIXE (pas cumulatif)
-        return Math.ceil(rect.height) + 40;
+        var contentBottom = rect.height;
+
+        // Les listes de suggestions (autocomplétion adresse) et autres menus déroulants
+        // s'affichent en OVERLAY hors du flux : ils ne comptent pas dans la hauteur du
+        // conteneur. On calcule donc le point le plus bas atteint par ces overlays
+        // pour que l'iframe s'agrandisse assez et ne coupe pas la liste ni le bouton.
+        var containerTop = rect.top + (streamlitDoc.defaultView.scrollY || 0);
+        var overlayBottom = 0;
+        try {
+            var overlays = streamlitDoc.querySelectorAll(
+                '[data-baseweb="popover"], [role="listbox"], [data-baseweb="menu"], ul[role="listbox"]'
+            );
+            overlays.forEach(function(o) {
+                var r = o.getBoundingClientRect();
+                if (r.height > 0) {
+                    var absBottom = r.bottom + (streamlitDoc.defaultView.scrollY || 0);
+                    var relBottom = absBottom - containerTop;
+                    if (relBottom > overlayBottom) overlayBottom = relBottom;
+                }
+            });
+        } catch(e) {}
+
+        // hauteur = le plus bas entre le contenu et un éventuel overlay ouvert, + padding fixe
+        return Math.ceil(Math.max(contentBottom, overlayBottom)) + 40;
     }
 
     function sendHeight() {
@@ -1849,6 +1871,18 @@ st.components.v1.html("""
 
     sendHeight();
     [100, 400, 800, 1500, 3000].forEach(function(ms) { setTimeout(sendHeight, ms); });
+
+    // Relance la mesure quand l'utilisateur interagit (ouverture d'une liste de
+    // suggestions, focus sur un champ...). Plusieurs délais pour capter l'animation
+    // d'apparition de l'overlay.
+    function recheck() {
+        [50, 200, 450].forEach(function(ms) { setTimeout(sendHeight, ms); });
+    }
+    try {
+        streamlitDoc.addEventListener("click", recheck, true);
+        streamlitDoc.addEventListener("focusin", recheck, true);
+        streamlitDoc.addEventListener("input", recheck, true);
+    } catch(e) {}
 
     try {
         var target = streamlitDoc.querySelector('.block-container') || streamlitDoc.body;

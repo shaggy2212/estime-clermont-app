@@ -89,6 +89,14 @@ try:
 except Exception:
     DEBUG = False
 
+# Détecte si l'app est embarquée (iframe Ghost avec ?embed=true) ou en accès direct.
+# Sert à n'activer le CSS "pas de scroll interne" que dans l'iframe.
+IS_EMBED = False
+try:
+    IS_EMBED = (st.query_params.get("embed", "") == "true")
+except Exception:
+    IS_EMBED = False
+
 # ===========================
 # CSS — Design ludique clair
 # ===========================
@@ -724,18 +732,25 @@ hr {{
         max-width: 100% !important;
     }}
 }}
-
-/* Pas de scroll interne dans l'app : c'est la page Ghost qui scrolle, point */
-[data-testid="stAppViewContainer"],
-[data-testid="stMain"],
-section.main, .main, .main .block-container {{
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    overflow: visible !important;
-}}
 </style>
 """, unsafe_allow_html=True)
+
+# CSS "pas de scroll interne" : UNIQUEMENT en mode embarqué (iframe Ghost).
+# En accès direct (icostim.streamlit.app), on laisse Streamlit gérer son scroll
+# normalement, sinon le bas de page devient inaccessible.
+if IS_EMBED:
+    st.markdown("""
+    <style>
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"],
+    section.main, .main, .main .block-container {
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow: visible !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 
 # ===========================

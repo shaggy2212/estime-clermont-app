@@ -89,11 +89,12 @@ try:
 except Exception:
     DEBUG = False
 
-# Détecte si l'app est embarquée (iframe Ghost avec ?embed=true) ou en accès direct.
-# Sert à n'activer le CSS "pas de scroll interne" que dans l'iframe.
+# Détecte si l'app est embarquée dans Ghost (param maison ?ghost=1).
+# On n'utilise PAS "embed" car Streamlit le consomme en interne et le retire
+# de query_params, ce qui rendrait la détection inopérante dans l'iframe.
 IS_EMBED = False
 try:
-    IS_EMBED = (st.query_params.get("embed", "") == "true")
+    IS_EMBED = (st.query_params.get("ghost", "") == "1")
 except Exception:
     IS_EMBED = False
 

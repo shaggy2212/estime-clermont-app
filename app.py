@@ -1793,8 +1793,8 @@ if st.session_state.result_payload and st.session_state.geo:
 
 # ===========================
 # Hauteur dynamique → Ghost
-# L'app mesure sa vraie hauteur et l'envoie à TOUS les niveaux parents.
-# (un seul est le bon, Ghost ; les autres ignorent. Évite de deviner le parent.)
+# L'app mesure sa vraie hauteur (mesure robuste) et l'envoie à TOUS les niveaux parents.
+# Seuil de 40px pour éviter les rétrécissements en cascade dus au min-height:0 du CSS.
 # ===========================
 st.components.v1.html("""
 <script>
@@ -1809,16 +1809,32 @@ st.components.v1.html("""
         try { window.top.postMessage(msg, "*"); } catch(e) {}
     }
 
+    function measureHeight() {
+        var body = streamlitDoc.body;
+        var html = streamlitDoc.documentElement;
+        // Mesure classique
+        var h1 = Math.max(
+            body.scrollHeight, body.offsetHeight,
+            html.scrollHeight, html.offsetHeight
+        );
+        // Mesure robuste : bas du dernier bloc réel de l'app
+        var h2 = 0;
+        try {
+            var app = streamlitDoc.querySelector('[data-testid="stAppViewContainer"]')
+                   || streamlitDoc.querySelector('.main')
+                   || body;
+            var rect = app.getBoundingClientRect();
+            h2 = rect.bottom + (streamlitDoc.defaultView.scrollY || 0);
+        } catch(e) {}
+        return Math.max(h1, h2);
+    }
+
     function sendHeight() {
         try {
-            var body = streamlitDoc.body;
-            var html = streamlitDoc.documentElement;
-            var h = Math.max(
-                body.scrollHeight, body.offsetHeight,
-                html.clientHeight, html.scrollHeight, html.offsetHeight
-            );
-            // N'envoie que si la hauteur a vraiment changé (évite les tremblements)
-            if (h && Math.abs(h - last) > 8) {
+            var h = measureHeight();
+            // On n'envoie que si la variation est significative (> 40px),
+            // pour éviter les micro-tassements en cascade.
+            if (h && Math.abs(h - last) > 40) {
                 last = h;
                 broadcast(h);
             }
@@ -1826,9 +1842,7 @@ st.components.v1.html("""
     }
 
     sendHeight();
-    [100, 400, 800, 1500, 3000].forEach(function(ms) {
-        setTimeout(sendHeight, ms);
-    });
+    [100, 400, 800, 1500, 3000].forEach(function(ms) { setTimeout(sendHeight, ms); });
 
     try {
         var ro = new ResizeObserver(function() { sendHeight(); });

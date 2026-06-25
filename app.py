@@ -1809,8 +1809,8 @@ if st.session_state.result_payload and st.session_state.geo:
 
 # ===========================
 # Hauteur dynamique → Ghost
-# L'app mesure sa vraie hauteur (mesure robuste) et l'envoie à TOUS les niveaux parents.
-# Seuil de 40px pour éviter les rétrécissements en cascade dus au min-height:0 du CSS.
+# Mesure le bloc de contenu réel (block-container), pas le body global qui se laisse
+# influencer par la taille de l'iframe. Pas de marge ajoutée = pas de boucle qui gonfle.
 # ===========================
 st.components.v1.html("""
 <script>
@@ -1826,32 +1826,21 @@ st.components.v1.html("""
     }
 
     function measureHeight() {
-        var body = streamlitDoc.body;
-        var html = streamlitDoc.documentElement;
-        // Mesure classique
-        var h1 = Math.max(
-            body.scrollHeight, body.offsetHeight,
-            html.scrollHeight, html.offsetHeight
-        );
-        // Mesure robuste : bas du dernier bloc réel de l'app
-        var h2 = 0;
-        try {
-            var app = streamlitDoc.querySelector('[data-testid="stAppViewContainer"]')
-                   || streamlitDoc.querySelector('.main')
-                   || body;
-            var rect = app.getBoundingClientRect();
-            h2 = rect.bottom + (streamlitDoc.defaultView.scrollY || 0);
-        } catch(e) {}
-        // Marge de sécurité : garantit que le bas (bouton, barre) ne soit jamais coupé.
-        return Math.max(h1, h2) + 120;
+        // On mesure le conteneur de contenu réel, dont la hauteur ne dépend PAS
+        // de la taille de l'iframe (contrairement à body.scrollHeight).
+        var el = streamlitDoc.querySelector('.block-container')
+              || streamlitDoc.querySelector('[data-testid="stMainBlockContainer"]')
+              || streamlitDoc.querySelector('section.main');
+        if (!el) return 0;
+        var rect = el.getBoundingClientRect();
+        // hauteur réelle du contenu + un petit padding bas FIXE (pas cumulatif)
+        return Math.ceil(rect.height) + 40;
     }
 
     function sendHeight() {
         try {
             var h = measureHeight();
-            // On n'envoie que si la variation est significative (> 40px),
-            // pour éviter les micro-tassements en cascade.
-            if (h && Math.abs(h - last) > 40) {
+            if (h && Math.abs(h - last) > 30) {
                 last = h;
                 broadcast(h);
             }
@@ -1862,13 +1851,14 @@ st.components.v1.html("""
     [100, 400, 800, 1500, 3000].forEach(function(ms) { setTimeout(sendHeight, ms); });
 
     try {
+        var target = streamlitDoc.querySelector('.block-container') || streamlitDoc.body;
         var ro = new ResizeObserver(function() { sendHeight(); });
-        ro.observe(streamlitDoc.body);
+        ro.observe(target);
     } catch(e) {}
 
     try {
         var mo = new MutationObserver(function() { sendHeight(); });
-        mo.observe(streamlitDoc.body, { childList: true, subtree: true, attributes: true });
+        mo.observe(streamlitDoc.body, { childList: true, subtree: true });
     } catch(e) {}
 })();
 </script>

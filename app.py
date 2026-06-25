@@ -1842,7 +1842,8 @@ st.components.v1.html("""
             var rect = app.getBoundingClientRect();
             h2 = rect.bottom + (streamlitDoc.defaultView.scrollY || 0);
         } catch(e) {}
-        return Math.max(h1, h2);
+        // Marge de sécurité : garantit que le bas (bouton, barre) ne soit jamais coupé.
+        return Math.max(h1, h2) + 120;
     }
 
     function sendHeight() {
